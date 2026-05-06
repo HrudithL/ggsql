@@ -594,6 +594,21 @@ mod tests {
     use crate::df;
     use crate::writer::{VegaLiteWriter, Writer};
 
+    fn data_layer(json: &serde_json::Value, index: usize) -> &serde_json::Value {
+        json["layer"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|l| {
+                !matches!(
+                    l.get("description").and_then(|d| d.as_str()),
+                    Some("background" | "foreground")
+                )
+            })
+            .nth(index)
+            .expect("data layer not found at index")
+    }
+
     #[test]
     fn test_execute_and_render() {
         let reader = DuckDBReader::from_connection_string("duckdb://memory").unwrap();
@@ -683,7 +698,7 @@ mod tests {
 
         // The encoding should have a theta channel with a scale range offset by 90 degrees
         // 90 degrees = π/2 radians
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
         let theta = &layer["encoding"]["theta"];
         assert!(theta.is_object(), "theta encoding should exist");
 
@@ -728,7 +743,7 @@ mod tests {
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
 
         // The theta encoding should NOT have a scale with range when start is 0 (default)
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
         let theta = &layer["encoding"]["theta"];
         assert!(theta.is_object(), "theta encoding should exist");
 
@@ -756,7 +771,7 @@ mod tests {
         let result = writer.render(&spec).unwrap();
 
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
         let theta = &layer["encoding"]["theta"];
         let range = theta["scale"]["range"].as_array().unwrap();
 
@@ -791,7 +806,7 @@ mod tests {
         let result = writer.render(&spec).unwrap();
 
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
         let theta = &layer["encoding"]["theta"];
         let range = theta["scale"]["range"].as_array().unwrap();
 
@@ -819,7 +834,7 @@ mod tests {
 
         // Helper to check encoding keys
         fn check_encoding_keys(json: &serde_json::Value, test_name: &str) {
-            let layer = json["layer"].as_array().unwrap().first().unwrap();
+            let layer = data_layer(json, 0);
             assert!(
                 layer["encoding"].get("theta").is_some(),
                 "{} should produce theta encoding, got keys: {:?}",
@@ -898,7 +913,7 @@ mod tests {
         let reader = DuckDBReader::from_connection_string("duckdb://memory").unwrap();
 
         fn check_cartesian_keys(json: &serde_json::Value, test_name: &str) {
-            let layer = json["layer"].as_array().unwrap().first().unwrap();
+            let layer = data_layer(json, 0);
             assert!(
                 layer["encoding"].get("x").is_some(),
                 "{} should produce x encoding, got keys: {:?}",
@@ -1153,7 +1168,7 @@ mod tests {
         let result = writer.render(&spec).unwrap();
 
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
 
         // Check radius scale has range with expressions
         let radius = &layer["encoding"]["radius"];
@@ -1172,8 +1187,8 @@ mod tests {
             range[1]["expr"]
                 .as_str()
                 .unwrap()
-                .contains("min(width,height)/2"),
-            "Outer radius expression should be min(width,height)/2, got: {:?}",
+                .contains("min(width, height) / 2"),
+            "Outer radius expression should contain min(width, height) / 2, got: {:?}",
             range[1]
         );
     }
@@ -1199,7 +1214,7 @@ mod tests {
         let result = writer.render(&spec).unwrap();
 
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
 
         // Verify y and y2 encodings exist (stacked bars use y/y2 for range)
         let encoding = &layer["encoding"];
@@ -1232,7 +1247,7 @@ mod tests {
         let result = writer.render(&spec).unwrap();
 
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
 
         // Verify y and y2 encodings exist (stacked bars use y/y2 for range)
         let encoding = &layer["encoding"];
@@ -1270,7 +1285,7 @@ mod tests {
 
         // Should succeed without "discrete scale does not support SETTING 'expand'" error
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
 
         // Verify stacking works (y2 encoding exists for stacked bars)
         let encoding = &layer["encoding"];
@@ -1302,7 +1317,7 @@ mod tests {
         let result = writer.render(&spec).unwrap();
 
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
 
         // Verify xOffset encoding exists (dodged bars use xOffset for displacement)
         let encoding = &layer["encoding"];
@@ -1347,7 +1362,7 @@ mod tests {
         let result = writer.render(&spec).unwrap();
 
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
 
         // Verify no xOffset encoding (identity position)
         let encoding = &layer["encoding"];
@@ -1375,7 +1390,7 @@ mod tests {
         let result = writer.render(&spec).unwrap();
 
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
         let encoding = &layer["encoding"];
 
         // With PROJECT y, x TO cartesian:
@@ -1416,7 +1431,7 @@ mod tests {
         let result = writer.render(&spec).unwrap();
 
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
-        let layer = json["layer"].as_array().unwrap().first().unwrap();
+        let layer = data_layer(&json, 0);
         let encoding = &layer["encoding"];
 
         // Verify theta encoding has the label
