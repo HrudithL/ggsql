@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# System build deps (substrait crate needs protoc).
+sudo apt-get update -qq
+sudo apt-get install -y -qq protobuf-compiler
+
 # Toolchain
 rustup component add rustfmt clippy
 cargo install --locked tree-sitter-cli || true
