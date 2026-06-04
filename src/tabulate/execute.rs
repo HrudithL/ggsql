@@ -1,13 +1,21 @@
-//! Execution pipeline: parse TABULATE query → run SQL against DuckDB →
-//! produce an in-memory table representation ready for HTML rendering.
+//! Execution pipeline: parse TABULATE query → run SQL → produce an in-memory
+//! table representation ready for HTML rendering.
 //!
-//! This is the main entry point used by the fixture test harness.
+//! Two entry points:
+//! - [`execute`] — fixture-test harness, runs against a parquet file directly.
+//! - [`execute_with_reader`] — CLI / library use, runs against any
+//!   [`crate::reader::Reader`].
+//!
+//! Both funnel into [`build_table_ir`], which owns the column-resolution,
+//! formatting, and IR construction logic.
 
 use crate::parser::{tabulate as tab_parser, SourceTree};
+use crate::reader::Reader;
 use crate::tabulate::ast::{FormatMode, SettingValue, TabulateStmt};
 use crate::{GgsqlError, Result};
 use arrow::array::{Array, ArrayRef, Float64Array, StringArray};
 use arrow::datatypes::{DataType, Schema};
+use arrow::record_batch::RecordBatch;
 use duckdb::{params, Connection};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use std::collections::HashMap;
@@ -117,7 +125,47 @@ pub fn execute(query: &str, data_path: &Path) -> Result<TableIr> {
             .map_err(|e| GgsqlError::ReaderError(format!("concat_batches failed: {}", e)))?
     };
 
-    // 5. Determine which columns to show and their metadata.
+    build_table_ir(&tab_stmt, &combined, Some(&orig_schema))
+}
+
+/// Parse `query`, execute the SQL portion through `reader`, apply TABULATE
+/// transforms, and return the table IR.
+///
+/// This is the entry point used by the `ggsql` CLI (and any library caller
+/// that wants to render a TABULATE query through a generic `Reader`). It
+/// mirrors `Reader::execute` in shape but produces a [`TableIr`] instead of
+/// a `Spec`.
+pub fn execute_with_reader(reader: &dyn Reader, query: &str) -> Result<TableIr> {
+    let source = SourceTree::new(query)?;
+    source.validate()?;
+
+    let tab_stmt = tab_parser::parse_tabulate(&source)?;
+
+    // Resolve a table name only for the standalone `TABULATE * FROM <src>`
+    // case where there is no SQL portion to run.
+    let table_name = determine_table_name(&source, &tab_stmt);
+    let sql = build_sql(&source, &tab_stmt, &table_name);
+
+    let df = reader.execute_sql(&sql)?;
+    let batch = df.into_inner();
+
+    build_table_ir(&tab_stmt, &batch, None)
+}
+
+/// Core IR construction: take a resolved TABULATE statement and a
+/// `RecordBatch` of fetched data, apply column selection, alignment,
+/// formatting, and hide rules, and emit a [`TableIr`].
+///
+/// `orig_schema` is an optional hint with more precise type information
+/// than the post-execution batch (for parquet sources this carries
+/// `Dictionary` types that DuckDB normalises away). Pass `None` when the
+/// data came through a generic `Reader`.
+fn build_table_ir(
+    tab_stmt: &TabulateStmt,
+    combined: &RecordBatch,
+    orig_schema: Option<&Schema>,
+) -> Result<TableIr> {
+    // Determine which columns to show and their metadata.
     let requested_cols = &tab_stmt.columns; // empty == all
     let combined_schema = combined.schema();
     let schema_names: Vec<&str> = combined_schema
@@ -160,11 +208,11 @@ pub fn execute(query: &str, data_path: &Path) -> Result<TableIr> {
         .filter(|c| !hidden.iter().any(|h| h.eq_ignore_ascii_case(c)))
         .collect();
 
-    // 6. Build column metadata with alignment.
+    // Build column metadata with alignment.
     let columns: Vec<ColMeta> = visible_cols
         .iter()
         .map(|col_name| {
-            let align = determine_alignment(col_name, &orig_schema, &combined);
+            let align = determine_alignment(col_name, orig_schema, combined);
             ColMeta {
                 name: col_name.to_string(),
                 align,
@@ -254,39 +302,43 @@ fn build_sql(source: &SourceTree<'_>, _tab_stmt: &TabulateStmt, table_name: &str
     format!("SELECT * FROM {}", table_name)
 }
 
-/// Determine alignment for a column given the original parquet Arrow schema
-/// and the actual data column from DuckDB.
+/// Determine alignment for a column given the original Arrow schema (if
+/// available — e.g. when reading directly from parquet) and the actual data
+/// column from the query result.
 fn determine_alignment(
     col_name: &str,
-    orig_schema: &Schema,
+    orig_schema: Option<&Schema>,
     batch: &arrow::record_batch::RecordBatch,
 ) -> ColAlign {
-    // Check original parquet type (before DuckDB normalization).
-    if let Ok(orig_idx) = orig_schema.index_of(col_name) {
-        let orig_type = orig_schema.field(orig_idx).data_type();
-        match orig_type {
-            DataType::Dictionary(_, _) => return ColAlign::Center,
-            DataType::Float16
-            | DataType::Float32
-            | DataType::Float64
-            | DataType::Int8
-            | DataType::Int16
-            | DataType::Int32
-            | DataType::Int64
-            | DataType::UInt8
-            | DataType::UInt16
-            | DataType::UInt32
-            | DataType::UInt64
-            | DataType::Decimal128(_, _)
-            | DataType::Decimal256(_, _) => return ColAlign::Right,
-            DataType::Date32 | DataType::Date64 => return ColAlign::Right,
-            DataType::Time32(_) | DataType::Time64(_) => return ColAlign::Right,
-            DataType::Timestamp(_, _) => return ColAlign::Right,
-            _ => {}
+    // Check original Arrow schema type (more precise than the post-execution
+    // schema; e.g. parquet preserves Dictionary that DuckDB collapses).
+    if let Some(orig_schema) = orig_schema {
+        if let Ok(orig_idx) = orig_schema.index_of(col_name) {
+            let orig_type = orig_schema.field(orig_idx).data_type();
+            match orig_type {
+                DataType::Dictionary(_, _) => return ColAlign::Center,
+                DataType::Float16
+                | DataType::Float32
+                | DataType::Float64
+                | DataType::Int8
+                | DataType::Int16
+                | DataType::Int32
+                | DataType::Int64
+                | DataType::UInt8
+                | DataType::UInt16
+                | DataType::UInt32
+                | DataType::UInt64
+                | DataType::Decimal128(_, _)
+                | DataType::Decimal256(_, _) => return ColAlign::Right,
+                DataType::Date32 | DataType::Date64 => return ColAlign::Right,
+                DataType::Time32(_) | DataType::Time64(_) => return ColAlign::Right,
+                DataType::Timestamp(_, _) => return ColAlign::Right,
+                _ => {}
+            }
         }
     }
 
-    // Check DuckDB result type.
+    // Check the query result type.
     let batch_schema = batch.schema();
     if let Ok(idx) = batch_schema.index_of(col_name) {
         let dt = batch_schema.field(idx).data_type();

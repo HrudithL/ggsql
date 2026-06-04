@@ -1,0 +1,12 @@
+-- TABULATE composes with the full SQL surface — WHERE, ORDER BY, LIMIT all work
+-- because the SQL portion is executed unchanged by the reader before TABULATE
+-- shapes the result.
+SELECT
+  'Acme'             AS company, 120000 AS revenue UNION ALL SELECT
+  'Globex',                       98000           UNION ALL SELECT
+  'Initech',                      54000           UNION ALL SELECT
+  'Umbrella',                    210000           UNION ALL SELECT
+  'Stark Industries',            480000
+ORDER BY revenue DESC
+LIMIT 3
+TABULATE company, revenue

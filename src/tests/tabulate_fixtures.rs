@@ -114,6 +114,49 @@ fn fixture_09_hide_a_column() {
     run_fixture("09_hide_a_column");
 }
 
+/// Render phase-1 fixtures to a viewable HTML page at
+/// `target/tabulate_demo.html`. Ignored by default; run with
+/// `cargo test --test tabulate_fixtures emit_demo -- --include-ignored --nocapture`.
+#[test]
+#[ignore = "demo output, not a correctness check"]
+fn emit_demo() {
+    let names = [
+        "01_minimal_table_all_columns",
+        "02_column_selection_and_reordering",
+        "09_hide_a_column",
+    ];
+    let mut sections = String::new();
+    for name in names {
+        let dir = fixtures_root().join(name);
+        let query = fs::read_to_string(dir.join("query.ggsql")).unwrap();
+        let ir = ggsql::tabulate::execute::execute(&query, &dir.join("data.parquet")).unwrap();
+        let html = ggsql::tabulate::html::render(&ir);
+        sections.push_str(&format!(
+            "<section><h2>{}</h2>\
+             <pre style='background:#eee;padding:.5rem;border-radius:4px'>{}</pre>\
+             {}</section><hr>",
+            name,
+            query.trim(),
+            html
+        ));
+    }
+    let page = format!(
+        "<!doctype html><meta charset=utf-8><title>TABULATE demo</title>\
+         <style>body{{font-family:system-ui;margin:2rem;max-width:1200px}}\
+         h1{{color:#333}}h2{{color:#555;font-size:1rem;margin-top:2rem}}\
+         hr{{margin:2rem 0;border:none;border-top:1px solid #ccc}}</style>\
+         <h1>TABULATE &mdash; rendered by ggsql</h1>\
+         <p>Pipeline: tree-sitter parse &rarr; DuckDB &rarr; Arrow &rarr; gt 1.3 HTML.</p>\
+         {sections}"
+    );
+    let out = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("target")
+        .join("tabulate_demo_ggsql.html");
+    fs::write(&out, page).unwrap();
+    println!("wrote {}", out.display());
+}
+
 /// Smoke test: normalize expected.html to itself (proves the harness links).
 #[test]
 #[ignore = "superseded by per-fixture tests above"]
