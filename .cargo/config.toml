@@ -1,6 +1,12 @@
 [env]
 LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_MATH_FUNCTIONS"
 
+[build]
+jobs = 2
+
+[target.aarch64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
 [target.wasm32-unknown-unknown]
 rustflags = [
   "-C", "link-args=-z stack-size=16777216",

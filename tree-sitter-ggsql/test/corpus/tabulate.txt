@@ -1,0 +1,100 @@
+================================================================================
+TABULATE all columns from named source
+================================================================================
+
+TABULATE * FROM exibble
+
+--------------------------------------------------------------------------------
+
+(query
+  (tabulate_statement
+    (tabulate_keyword)
+    (tab_col_list)
+    (tab_from_clause
+      source: (identifier
+        (bare_identifier)))))
+
+================================================================================
+TABULATE with explicit column list
+================================================================================
+
+TABULATE mfr, model, year, hp
+
+--------------------------------------------------------------------------------
+
+(query
+  (tabulate_statement
+    (tabulate_keyword)
+    (tab_col_list
+      (identifier
+        (bare_identifier))
+      (identifier
+        (bare_identifier))
+      (identifier
+        (bare_identifier))
+      (identifier
+        (bare_identifier)))))
+
+================================================================================
+TABULATE with FORMAT SETTING hide
+================================================================================
+
+TABULATE mfr, model, year, hp
+FORMAT mfr
+  SETTING hide => true
+
+--------------------------------------------------------------------------------
+
+(query
+  (tabulate_statement
+    (tabulate_keyword)
+    (tab_col_list
+      (identifier
+        (bare_identifier))
+      (identifier
+        (bare_identifier))
+      (identifier
+        (bare_identifier))
+      (identifier
+        (bare_identifier)))
+    (tab_clause
+      (format_clause
+        (format_keyword)
+        (identifier
+          (bare_identifier))
+        (format_setting_block
+          (format_setting_pair
+            name: (identifier
+              (bare_identifier))
+            value: (boolean)))))))
+
+================================================================================
+SQL SELECT followed by TABULATE
+================================================================================
+
+SELECT mfr, model FROM gtcars
+TABULATE mfr, model
+
+--------------------------------------------------------------------------------
+
+(query
+  (sql_portion
+    (sql_statement
+      (select_statement
+        (select_body
+          (identifier
+            (bare_identifier))
+          (identifier
+            (bare_identifier))
+          (from_clause
+            (table_ref
+              (qualified_name
+                (identifier
+                  (bare_identifier)))))))))
+  (tabulate_statement
+    (tabulate_keyword)
+    (tab_col_list
+      (identifier
+        (bare_identifier))
+      (identifier
+        (bare_identifier)))))

@@ -6,6 +6,8 @@
 //!
 //! Status: bootstrap skeleton. Phases land per spec section 5.
 
+pub mod ast;
+pub mod execute;
 pub mod html;
 pub mod test_normalize;
 

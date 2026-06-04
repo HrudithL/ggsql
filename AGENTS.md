@@ -3,14 +3,14 @@
 Read in this order:
 
 1. [/spec/GTSQL_AGENTBUILD_SPEC.md](../gtsql/GTSQL_AGENTBUILD_SPEC.md) —
-   goal, oracle, test loop, sandbox, phase order.
-2. [TABULATE_PLAN.md](TABULATE_PLAN.md) — the implementation contract for
-   this repo. Codifies the fixture-accurate syntax (which differs from the
-   prose in `/spec/GTSQL_PLAN.md` in a few places — see §5 of the plan) and
-   maps each phase to concrete modules under `src/tabulate/`.
-3. [/spec/GTSQL_PLAN.md](../gtsql/GTSQL_PLAN.md) — language reference. When
-   the prose conflicts with the fixtures, the fixtures win (see
-   `TABULATE_PLAN.md` §5 for the resolved deltas).
+   goal, oracle, normalization rule, phase order, sandbox, pass gate.
+2. [/spec/GTSQL_PLAN.md](../gtsql/GTSQL_PLAN.md) — language reference
+   (authoritative for syntax and semantics).
+3. [/spec/GTSQL_EXAMPLES.qmd](../gtsql/GTSQL_EXAMPLES.qmd) — example corpus
+   (each example is a fixture).
+4. [TABULATE_PLAN.md](TABULATE_PLAN.md) — implementation surfaces in this
+   repo (which file does what), phase-by-phase scope, and implementation
+   notes the spec leaves open.
 
 ## System prompt (paste into Copilot agent / Codex / Claude Code)
 
