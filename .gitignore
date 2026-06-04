@@ -118,3 +118,4 @@ ggsql.Rcheck/
 # tests/fixtures/ themselves ARE checked in (they're the oracle), but
 # Parquet binary blobs can grow — keep them but ignore any *.html.tmp.
 **/*.html.tmp
+!tests/fixtures/**/*.parquet
