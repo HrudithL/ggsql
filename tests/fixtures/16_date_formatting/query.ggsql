@@ -1,0 +1,3 @@
+TABULATE date, time FROM exibble
+FORMAT date
+  RENAMING * => '{:time %B %-d, %Y}'

@@ -53,6 +53,8 @@ pub mod execute;
 
 pub mod validate;
 
+pub mod tabulate;
+
 // Re-export key types for convenience
 pub use plot::{
     AestheticValue, DataSource, Facet, FacetLayout, Geom, Layer, Mappings, Plot, Scale,

@@ -1,0 +1,14 @@
+SELECT date, open, high, low, close,
+       'Week of ' || strftime('%b %d', date('start of week')) AS week
+FROM sp500
+WHERE date BETWEEN '2015-01-05' AND '2015-01-16'
+
+TABULATE date, open, high, low, close
+FORMAT STUB date
+FORMAT open, high, low, close
+  RENAMING * => '{:num ,.2f}'
+FACET week
+  SETTING target => (open, high, low, close),
+          aggregate => ('min', 'max', 'mean'),
+          label => ['Min', 'Max', 'Avg'],
+          side => 'bottom'

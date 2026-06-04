@@ -1,0 +1,6 @@
+example_number = 26
+title = "Conditional cell highlight (single column)"
+gt_version = "1.3.0"
+captured_at = "2026-06-04T00:32:06-0400"
+normalization_profile = "default"
+# allowed_diff = []  # add regex strings only with justification in AGENT_LOG.md

@@ -1,0 +1,4 @@
+TABULATE name, score, grade FROM students
+HIGHLIGHT score
+  FILTER score < 60
+  SETTING face => 'bold', color => 'red'

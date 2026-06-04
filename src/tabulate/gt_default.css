@@ -1,0 +1,5 @@
+/* Vendored from gt 1.3.0 on 2026-06-04.
+ * Treat as opaque bytes. Re-run scripts/extract_gt_css.R to refresh.
+ * gt 1.3+ inlines most styles via `style=` attributes; this file holds
+ * only the supplementary <style> blocks gt emits (may be empty). */
+

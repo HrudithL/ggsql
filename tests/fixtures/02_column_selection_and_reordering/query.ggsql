@@ -1,0 +1,2 @@
+SELECT mfr, model, year, hp FROM gtcars LIMIT 6
+TABULATE mfr, model, year, hp

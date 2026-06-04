@@ -113,3 +113,8 @@ ggsql.Rcheck/
 *.dmg
 *.AppImage
 .cargo-packager/
+
+# Agent / fixture artifacts that should be regenerated, not committed.
+# tests/fixtures/ themselves ARE checked in (they're the oracle), but
+# Parquet binary blobs can grow — keep them but ignore any *.html.tmp.
+**/*.html.tmp

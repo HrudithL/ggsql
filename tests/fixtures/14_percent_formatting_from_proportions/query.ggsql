@@ -1,0 +1,15 @@
+WITH monthly AS (
+  SELECT CAST(SUBSTR(date, 6, 2) AS INT) AS month, COUNT(*) AS pizzas_sold
+  FROM pizzaplace
+  GROUP BY 1
+),
+totals AS (SELECT SUM(pizzas_sold) AS total FROM monthly)
+SELECT m.month, m.pizzas_sold, 1.0 * m.pizzas_sold / t.total AS pct_of_annual
+FROM monthly m CROSS JOIN totals t
+
+TABULATE month, pizzas_sold, pct_of_annual
+FORMAT STUB month
+FORMAT pizzas_sold
+  RENAMING * => '{:num ,d}'
+FORMAT pct_of_annual
+  RENAMING * => '{:num .1f}%'

@@ -1,0 +1,9 @@
+SELECT date, open, high, low, close
+FROM sp500
+WHERE date BETWEEN '2015-01-01' AND '2015-01-15'
+
+TABULATE date, open, high, low, close
+FORMAT open, high, low, close
+  RENAMING * => '${:num ,.2f}'
+SCALE background FROM (1990, 2090) TO RdYlGn
+  SETTING target => (open, high, low, close)

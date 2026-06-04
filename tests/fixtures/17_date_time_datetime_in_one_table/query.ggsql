@@ -1,0 +1,8 @@
+SELECT date, time, datetime FROM exibble LIMIT 4
+TABULATE date, time, datetime
+FORMAT date
+  RENAMING * => '{:time %-d %B %Y}'
+FORMAT time
+  RENAMING * => '{:time %-I:%M %p}'
+FORMAT datetime
+  RENAMING * => '{:time %A, %B %-d, %Y at %-I:%M %p}'

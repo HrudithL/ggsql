@@ -1,0 +1,4 @@
+SELECT model, year, hp, trq FROM gtcars LIMIT 5
+TABULATE model, year, hp, trq
+FORMAT STUB model AS model_head
+LABEL model_head => 'car'

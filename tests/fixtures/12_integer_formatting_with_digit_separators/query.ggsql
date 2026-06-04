@@ -1,0 +1,3 @@
+TABULATE num, char FROM exibble
+FORMAT num
+  RENAMING * => '{:num ,d}'

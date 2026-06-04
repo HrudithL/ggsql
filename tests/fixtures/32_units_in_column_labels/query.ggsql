@@ -1,0 +1,9 @@
+SELECT name, land_area_km2, density_2021 FROM towny LIMIT 5
+TABULATE name, land_area_km2, density_2021
+FORMAT STUB name
+FORMAT land_area_km2
+  SETTING units => 'km^2'
+  RENAMING * => '{:num ,.1f}'
+FORMAT density_2021
+  SETTING units => 'people/km^2'
+  RENAMING * => '{:num ,d}'

@@ -1,0 +1,7 @@
+TABULATE num, char, currency FROM exibble
+FORMAT num
+  RENAMING null => 'N/A'
+FORMAT char
+  RENAMING null => '(none)'
+FORMAT currency
+  RENAMING null => '---'

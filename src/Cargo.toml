@@ -60,6 +60,10 @@ ureq = "3"
 adbc_datafusion = "0.23"
 adbc_driver_manager = "0.23"
 
+[[test]]
+name = "tabulate_fixtures"
+path = "tests/tabulate_fixtures.rs"
+
 [features]
 default = ["adbc", "duckdb", "sqlite", "vegalite", "parquet", "builtin-data", "odbc", "spatial"]
 duckdb = ["dep:duckdb"]

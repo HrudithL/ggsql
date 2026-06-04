@@ -1,0 +1,13 @@
+SELECT name, population_2016, population_2021, density_2016, density_2021
+FROM towny
+ORDER BY population_2021 DESC
+LIMIT 5
+
+TABULATE name, population_2016, population_2021, density_2016, density_2021
+FORMAT SPAN population_2016, population_2021 AS population
+FORMAT SPAN density_2016, density_2021 AS density
+FORMAT SPAN population, density AS comparison
+LABEL
+  population => 'Population',
+  density => 'Density',
+  comparison => '2016–2021 Comparison'

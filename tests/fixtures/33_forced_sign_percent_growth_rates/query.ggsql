@@ -1,0 +1,3 @@
+TABULATE region, growth_rate FROM growth
+FORMAT growth_rate
+  RENAMING * => '{:num +.1f}%'
