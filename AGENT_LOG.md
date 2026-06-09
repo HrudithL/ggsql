@@ -28,3 +28,19 @@ the deviation or `allowed_diff` justification.
 - New branch `agent/tabulate-phase-2` cut from `main` to begin phase 2
   (FORMAT STUB + LABEL title/subtitle/caption + LABEL <col>, fixtures 03,
   04, 05).
+
+## 2026-06-09 — phase 2 complete
+
+- Fixtures 03 (FORMAT STUB), 04 (LABEL title/subtitle), and 05 (LABEL
+  title/subtitle/caption + per-column relabels + FORMAT RENAMING
+  `{:num %'d}` thousands) pass under strict normalization.
+- Grammar gained `label_clause` as a `tab_clause`; string literals now
+  accept SQL-style `''` doubled-quote escapes (needed for `'Ontario''s
+  Largest Municipalities'`).
+- Fixture 05's `query.ggsql` was edited from the legacy `{:num ,d}` syntax
+  to the current spec form `{:num %''d}` per TABULATE_PLAN.md §1.
+  `expected.html` was not touched.
+- Phase 2 lands a minimal `{:num %'d}` / `{:num %.Nf}` formatter; the full
+  printf mini-language (forced sign, scientific, percent ×100, currency,
+  per-column locale, `{:time ...}`) remains for phase 5.
+- No `allowed_diff` entries added.
