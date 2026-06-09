@@ -1,0 +1,29 @@
+-- Phase 1–3 fully composed: stub column, title / subtitle / caption,
+-- per-column relabels, thousands-separator formatting, AND a nested
+-- spanner block over the numeric columns.
+SELECT
+  'Acme'             AS company,
+  1200000            AS revenue_2025, 1825 AS employees_2025,
+  1450000            AS revenue_2026, 1990 AS employees_2026 UNION ALL SELECT
+  'Globex',           980000, 1212, 1100000, 1305            UNION ALL SELECT
+  'Initech',          540500,  704,  610000,  742            UNION ALL SELECT
+  'Umbrella',        2100000, 2430, 2380000, 2615            UNION ALL SELECT
+  'Stark Industries',4800500, 5512, 5210000, 5901
+TABULATE company, revenue_2025, employees_2025, revenue_2026, employees_2026
+FORMAT STUB company
+FORMAT SPAN revenue_2025, employees_2025 AS y2025
+FORMAT SPAN revenue_2026, employees_2026 AS y2026
+FORMAT SPAN y2025, y2026                 AS snapshot
+FORMAT revenue_2025, revenue_2026, employees_2025, employees_2026
+  RENAMING * => '{:num %''d}'
+LABEL
+  revenue_2025   => 'Revenue (USD)',
+  employees_2025 => 'Headcount',
+  revenue_2026   => 'Revenue (USD)',
+  employees_2026 => 'Headcount',
+  y2025          => 'FY2025',
+  y2026          => 'FY2026',
+  snapshot       => 'Year-over-year snapshot',
+  title          => 'Top customers, FY25 vs FY26',
+  subtitle       => 'Revenue and headcount, side-by-side',
+  caption        => 'Source: internal CRM extract, 2026-Q2'

@@ -67,6 +67,11 @@ pub struct TableIr {
     pub caption: Option<String>,
     /// Index into `columns` of the stub column, if any.
     pub stub_col: Option<usize>,
+    /// Header tree forest. Leaves point into `columns` by index; interior
+    /// nodes are spanners introduced by `FORMAT SPAN ... AS <id>`. When no
+    /// spanners apply, this is a flat sequence of one [`HeaderNode::Column`]
+    /// per entry in `columns`.
+    pub header_forest: Vec<HeaderNode>,
 }
 
 #[derive(Debug, Clone)]
@@ -77,6 +82,47 @@ pub struct ColMeta {
     pub label: String,
     /// Alignment.
     pub align: ColAlign,
+}
+
+/// Node in the header tree. Spanners group child nodes (which may be
+/// columns or further spanners) under a parent label.
+#[derive(Debug, Clone)]
+pub enum HeaderNode {
+    /// Leaf node: an actual data column, identified by its index into
+    /// [`TableIr::columns`].
+    Column { col_idx: usize },
+    /// Spanner cell grouping one or more children.
+    Spanner {
+        /// HTML `id=` attribute (the bareword from `AS <id>`).
+        id: String,
+        /// Display text rendered inside the spanner cell.
+        label: String,
+        /// Child nodes in display order.
+        children: Vec<HeaderNode>,
+    },
+}
+
+impl HeaderNode {
+    /// Number of leaf columns under this node (1 for a column).
+    pub fn leaf_count(&self) -> usize {
+        match self {
+            HeaderNode::Column { .. } => 1,
+            HeaderNode::Spanner { children, .. } => {
+                children.iter().map(|c| c.leaf_count()).sum()
+            }
+        }
+    }
+
+    /// Height of the subtree: 0 for a column, 1 + max(child heights) for a
+    /// spanner.
+    pub fn height(&self) -> usize {
+        match self {
+            HeaderNode::Column { .. } => 0,
+            HeaderNode::Spanner { children, .. } => {
+                1 + children.iter().map(|c| c.height()).max().unwrap_or(0)
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -225,6 +271,32 @@ fn build_table_ir(
         .filter(|c| !hidden.iter().any(|h| h.eq_ignore_ascii_case(c)))
         .collect();
 
+    // gt promotes the stub column to position 0 in the rendered header so it
+    // sits left of the spanner block. Mirror that here.
+    let visible_cols: Vec<&str> = if let Some((stub_name, _)) = &stub_info {
+        if let Some(pos) = visible_cols
+            .iter()
+            .position(|c| stub_name.eq_ignore_ascii_case(c))
+        {
+            if pos != 0 {
+                let mut reordered = Vec::with_capacity(visible_cols.len());
+                reordered.push(visible_cols[pos]);
+                for (i, c) in visible_cols.iter().enumerate() {
+                    if i != pos {
+                        reordered.push(*c);
+                    }
+                }
+                reordered
+            } else {
+                visible_cols
+            }
+        } else {
+            visible_cols
+        }
+    } else {
+        visible_cols
+    };
+
     // Build a label-rename lookup keyed by lowercase column name AND by
     // lowercase span_id (so `LABEL model_head => '...'` reaches both the
     // stub column and any spanner sharing that id).
@@ -240,7 +312,18 @@ fn build_table_ir(
         .iter()
         .map(|col_name| {
             let align = determine_alignment(col_name, orig_schema, combined);
-            let mut label = col_name.to_string();
+            let is_stub = stub_info
+                .as_ref()
+                .map(|(n, _)| n.eq_ignore_ascii_case(col_name))
+                .unwrap_or(false);
+            // Stub columns without an explicit label render with empty header
+            // text (gt's default for `rowname_col`); regular columns default
+            // to the column name.
+            let mut label = if is_stub {
+                String::new()
+            } else {
+                col_name.to_string()
+            };
             if let Some(s) = label_map.get(&col_name.to_ascii_lowercase()) {
                 label = s.clone();
             }
@@ -352,6 +435,8 @@ fn build_table_ir(
         None => (None, None, None),
     };
 
+    let header_forest = build_header_forest(tab_stmt, &columns, &label_map);
+
     Ok(TableIr {
         columns,
         rows,
@@ -359,7 +444,91 @@ fn build_table_ir(
         subtitle,
         caption,
         stub_col: stub_col_idx,
+        header_forest,
     })
+}
+
+/// Build the header tree from `FORMAT SPAN <cols> AS <id>` clauses, starting
+/// from a flat sequence of columns and folding each span over the current
+/// forest. Children of a `FORMAT SPAN` are matched by name (case-insensitive)
+/// against either column names or previously-introduced spanner ids.
+///
+/// Spans whose children are not contiguous in the current frontier produce a
+/// best-effort grouping at the position of the first match; non-matching
+/// children are silently dropped. Phases 6-11 may need to revisit this if a
+/// fixture requires reordering.
+fn build_header_forest(
+    tab_stmt: &TabulateStmt,
+    columns: &[ColMeta],
+    label_map: &std::collections::HashMap<String, String>,
+) -> Vec<HeaderNode> {
+    // Start with a flat forest of columns in display order.
+    let mut nodes: Vec<HeaderNode> = (0..columns.len())
+        .map(|i| HeaderNode::Column { col_idx: i })
+        .collect();
+
+    // The id by which a node can be referenced in a later FORMAT SPAN: a
+    // column's name or a spanner's bareword id.
+    fn node_id<'a>(node: &'a HeaderNode, columns: &'a [ColMeta]) -> &'a str {
+        match node {
+            HeaderNode::Column { col_idx } => columns[*col_idx].name.as_str(),
+            HeaderNode::Spanner { id, .. } => id.as_str(),
+        }
+    }
+
+    for fc in &tab_stmt.format_clauses {
+        if fc.mode != FormatMode::Span {
+            continue;
+        }
+        let Some(span_id) = &fc.span_id else {
+            continue;
+        };
+        // Collect indices in `nodes` that match any of the listed child ids.
+        let matched: Vec<usize> = (0..nodes.len())
+            .filter(|&i| {
+                let nid = node_id(&nodes[i], columns);
+                fc.columns.iter().any(|c| c.eq_ignore_ascii_case(nid))
+            })
+            .collect();
+        if matched.is_empty() {
+            continue;
+        }
+        // Reorder matched children to match the FORMAT SPAN listing order.
+        let mut children: Vec<HeaderNode> = Vec::with_capacity(matched.len());
+        for want in &fc.columns {
+            if let Some(&i) = matched
+                .iter()
+                .find(|&&i| node_id(&nodes[i], columns).eq_ignore_ascii_case(want))
+            {
+                children.push(nodes[i].clone());
+            }
+        }
+        let label = label_map
+            .get(&span_id.to_ascii_lowercase())
+            .cloned()
+            .unwrap_or_else(|| span_id.clone());
+        let spanner = HeaderNode::Spanner {
+            id: span_id.clone(),
+            label,
+            children,
+        };
+        // Remove matched entries and insert the new spanner at the first
+        // matched position to preserve original layout order.
+        let insert_at = *matched.first().unwrap();
+        let matched_set: std::collections::HashSet<usize> = matched.iter().copied().collect();
+        let mut new_nodes: Vec<HeaderNode> = Vec::with_capacity(nodes.len() - matched.len() + 1);
+        for (i, n) in nodes.into_iter().enumerate() {
+            if matched_set.contains(&i) {
+                continue;
+            }
+            new_nodes.push(n);
+        }
+        let insert_pos = insert_at.min(new_nodes.len());
+        new_nodes.insert(insert_pos, spanner);
+        nodes = new_nodes;
+    }
+
+    nodes
 }
 
 // ============================================================================
@@ -568,17 +737,34 @@ fn build_float_formatter(values: &[Option<f64>]) -> Box<dyn Fn(Option<f64>) -> S
         });
     }
 
-    // Determine: scientific or fixed (3 decimal places)?
+    // Determine: scientific or fixed?
     let max_abs = non_null.iter().map(|v| v.abs()).fold(0f64, f64::max);
 
     let fixed_width_of_max = format!("{:.3}", max_abs).len();
     let use_scientific = fixed_width_of_max > 9;
 
+    // Pick the minimum decimal-place count (1..=3) that represents every
+    // value losslessly. gt's auto formatter behaves similarly: 12.0 and
+    // 12.345 in the same column → 3 dp, but 4.27 and 4.75 → 2 dp.
+    let dp = if use_scientific {
+        3
+    } else {
+        (1..=3)
+            .find(|&d| {
+                let scale = 10f64.powi(d);
+                non_null.iter().all(|v| {
+                    let rounded = (v * scale).round() / scale;
+                    (rounded - v).abs() <= 1e-9 * v.abs().max(1.0)
+                })
+            })
+            .unwrap_or(3) as usize
+    };
+
     Box::new(move |v: Option<f64>| match v {
         None => "NA".to_string(),
         Some(x) if x.is_nan() => "NA".to_string(),
         Some(x) if use_scientific => format_scientific_3dp(x),
-        Some(x) => format!("{:.3}", x),
+        Some(x) => format!("{:.*}", dp, x),
     })
 }
 

@@ -1,0 +1,19 @@
+-- Two side-by-side spanners. `LABEL <id> => '<text>'` overrides the
+-- spanner display text without changing the underlying column ids.
+SELECT
+  'Toronto'  AS city, 2731571 AS population_2016, 2794356 AS population_2021,
+                       4334.41 AS density_2016,    4427.75 AS density_2021 UNION ALL SELECT
+  'Ottawa',          934243,                       1017449,
+                       334.81,                      364.91                  UNION ALL SELECT
+  'Mississauga',     721599,                        717961,
+                      2467.93,                     2452.56                  UNION ALL SELECT
+  'Brampton',        593638,                        656480,
+                      2236.78,                     2468.99                  UNION ALL SELECT
+  'Hamilton',        536917,                        569353,
+                       490.10,                      518.91
+TABULATE city, population_2016, population_2021, density_2016, density_2021
+FORMAT SPAN population_2016, population_2021 AS population
+FORMAT SPAN density_2016, density_2021 AS density
+LABEL
+  population => 'Population',
+  density    => 'Density'

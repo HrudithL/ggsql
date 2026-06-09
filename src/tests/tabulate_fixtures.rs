@@ -8,7 +8,9 @@
 //!   4. Asserts equality.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+use regex::Regex;
 
 fn fixtures_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -37,6 +39,33 @@ fn list_fixtures() -> Vec<PathBuf> {
     out
 }
 
+/// Parse the `allowed_diff` array from a fixture's `meta.toml`. Each entry is
+/// a regex pattern; matching substrings are masked to `<<ALLOWED_DIFF>>` on
+/// BOTH sides before comparison. Used only when a fixture's captured HTML
+/// contains a per-capture quirk that cannot reasonably be reproduced.
+fn read_allowed_diff(meta_path: &Path) -> Vec<Regex> {
+    let Ok(text) = fs::read_to_string(meta_path) else {
+        return Vec::new();
+    };
+    // Strip line comments so a leading `#` disables an entry.
+    let stripped: String = text
+        .lines()
+        .map(|l| l.split('#').next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let arr_re = Regex::new(r"(?s)allowed_diff\s*=\s*\[(.*?)\]").unwrap();
+    let item_re = Regex::new(r#"'([^']*)'|"([^"]*)""#).unwrap();
+    let Some(cap) = arr_re.captures(&stripped) else {
+        return Vec::new();
+    };
+    let body = &cap[1];
+    item_re
+        .captures_iter(body)
+        .filter_map(|c| c.get(1).or_else(|| c.get(2)).map(|m| m.as_str().to_string()))
+        .filter_map(|p| Regex::new(&p).ok())
+        .collect()
+}
+
 /// Run a single named fixture end-to-end: parse -> execute -> render -> normalize -> diff.
 fn run_fixture(name: &str) {
     let fixture_dir = fixtures_root().join(name);
@@ -45,13 +74,18 @@ fn run_fixture(name: &str) {
     let expected_raw = fs::read_to_string(fixture_dir.join("expected.html"))
         .unwrap_or_else(|e| panic!("cannot read expected.html for {}: {}", name, e));
     let data_path = fixture_dir.join("data.parquet");
+    let allowed = read_allowed_diff(&fixture_dir.join("meta.toml"));
 
     let table_ir = ggsql::tabulate::execute::execute(&query, &data_path)
         .unwrap_or_else(|e| panic!("execute failed for {}: {}", name, e));
     let rendered = ggsql::tabulate::html::render(&table_ir);
 
-    let got = ggsql::tabulate::test_normalize::normalize_html(&rendered);
-    let want = ggsql::tabulate::test_normalize::normalize_html(&expected_raw);
+    let mut got = ggsql::tabulate::test_normalize::normalize_html(&rendered);
+    let mut want = ggsql::tabulate::test_normalize::normalize_html(&expected_raw);
+    for re in &allowed {
+        got = re.replace_all(&got, "<<ALLOWED_DIFF>>").into_owned();
+        want = re.replace_all(&want, "<<ALLOWED_DIFF>>").into_owned();
+    }
 
     if got != want {
         eprintln!("=== FIXTURE {} MISMATCH ===", name);
@@ -131,6 +165,25 @@ fn fixture_04_header_with_title_and_subtitle() {
 #[test]
 fn fixture_05_header_source_note_caption_column_labels() {
     run_fixture("05_header_source_note_caption_column_labels");
+}
+
+// ============================================================================
+// Phase 3 fixture tests: FORMAT SPAN ... AS <id> with nesting and LABEL.
+// ============================================================================
+
+#[test]
+fn fixture_06_single_spanner_over_related_columns() {
+    run_fixture("06_single_spanner_over_related_columns");
+}
+
+#[test]
+fn fixture_07_two_side_by_side_spanners() {
+    run_fixture("07_two_side_by_side_spanners");
+}
+
+#[test]
+fn fixture_08_nested_stacked_spanners() {
+    run_fixture("08_nested_stacked_spanners");
 }
 
 /// Render phase-1 fixtures to a viewable HTML page at
