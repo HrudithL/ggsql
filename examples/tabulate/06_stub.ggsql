@@ -1,0 +1,11 @@
+-- `FORMAT STUB <col>` designates a column as the row-label "stub".
+-- It is rendered as the first column with a heavier right border, matching
+-- gt's `rowname_col` styling.
+SELECT
+  'Acme'             AS company, 120000 AS revenue, 18 AS employees UNION ALL SELECT
+  'Globex',                       98000,             12              UNION ALL SELECT
+  'Initech',                      54000,              7              UNION ALL SELECT
+  'Umbrella',                    210000,             24              UNION ALL SELECT
+  'Stark Industries',            480000,             55
+TABULATE company, revenue, employees
+FORMAT STUB company

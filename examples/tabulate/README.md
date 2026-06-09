@@ -1,8 +1,9 @@
 # TABULATE examples
 
-A small set of runnable `.ggsql` examples that exercise the Phase 1
-`TABULATE` surface (column selection, reordering, `FORMAT col SETTING
-hide => true`, `TABULATE *`, and SQL composition).
+Runnable `.ggsql` examples that exercise the TABULATE surface implemented
+so far — phase 1 (column selection / reordering / hide / `*`) and phase 2
+(`FORMAT STUB`, `LABEL title/subtitle/caption`, per-column header relabels,
+and basic `{:num ...}` formatters).
 
 ## Run all examples
 
@@ -42,3 +43,8 @@ a browser:
 | [`03_hide.ggsql`](03_hide.ggsql)           | `FORMAT col SETTING hide => true`             |
 | [`04_select_star.ggsql`](04_select_star.ggsql) | `TABULATE *` showing every SELECT column  |
 | [`05_sql_filter.ggsql`](05_sql_filter.ggsql)   | `ORDER BY` / `LIMIT` before TABULATE      |
+| [`06_stub.ggsql`](06_stub.ggsql)           | `FORMAT STUB <col>` row-label column          |
+| [`07_title_subtitle.ggsql`](07_title_subtitle.ggsql) | `LABEL title => …, subtitle => …`   |
+| [`08_column_labels.ggsql`](08_column_labels.ggsql) | Per-column header relabel + `caption` source-note |
+| [`09_number_format.ggsql`](09_number_format.ggsql) | `RENAMING * => '{:num %''d}'` thousands separator |
+| [`10_full_header.ggsql`](10_full_header.ggsql) | All phase-2 features composed in one query |

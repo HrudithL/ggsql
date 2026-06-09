@@ -310,12 +310,7 @@ fn exec_with_reader<R: Reader>(
     render_spec(spec, writer, output, verbose);
 }
 
-fn render_tabulate<R: Reader>(
-    query: &str,
-    reader: &R,
-    output: Option<PathBuf>,
-    verbose: bool,
-) {
+fn render_tabulate<R: Reader>(query: &str, reader: &R, output: Option<PathBuf>, verbose: bool) {
     let table_ir = match tabulate::execute::execute_with_reader(reader, query) {
         Ok(ir) => ir,
         Err(e) => {

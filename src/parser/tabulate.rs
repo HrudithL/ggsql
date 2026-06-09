@@ -2,8 +2,8 @@
 
 use crate::parser::SourceTree;
 use crate::tabulate::ast::{
-    FormatClause, FormatMode, FormatRenaming, FormatSetting, RenamingLhs, SettingValue,
-    TabulateStmt,
+    FormatClause, FormatMode, FormatRenaming, FormatSetting, LabelClause, RenamingLhs,
+    SettingValue, TabulateStmt,
 };
 use crate::{GgsqlError, Result};
 
@@ -51,10 +51,24 @@ pub fn parse_tabulate(source: &SourceTree<'_>) -> Result<TabulateStmt> {
         .map(|fc_node| parse_format_clause(source, &fc_node))
         .collect::<Result<Vec<_>>>()?;
 
+    // --- LABEL clause (at most one per TABULATE) ---
+    let label_nodes = source.find_nodes(&stmt, "(label_clause) @lc");
+    if label_nodes.len() > 1 {
+        return Err(GgsqlError::ParseError(
+            "TABULATE allows at most one LABEL clause".to_string(),
+        ));
+    }
+    let label = label_nodes
+        .into_iter()
+        .next()
+        .map(|n| parse_label_clause(source, &n))
+        .transpose()?;
+
     Ok(TabulateStmt {
         columns,
         from_source,
         format_clauses,
+        label,
     })
 }
 
@@ -81,40 +95,25 @@ fn parse_format_clause(
         }
     };
 
-    // --- column names (all identifier children before AS / SETTING / RENAMING) ---
-    // Walk direct children of format_clause, collecting identifiers that appear
-    // before any setting/renaming block.
-    let mut columns: Vec<String> = Vec::new();
-    let mut span_id: Option<String> = None;
+    // --- column names + optional span_id ---
+    // Columns are direct identifier children up to (but not including) the one
+    // captured by the `span_id` field. Settings/renamings are in their own blocks.
+    let span_id_node = node.child_by_field_name("span_id");
+    let span_id: Option<String> = span_id_node.map(|n| source.get_text(&n));
 
+    let mut columns: Vec<String> = Vec::new();
     {
-        // Use the raw tree-sitter children walk
         let mut cursor = node.walk();
-        let children = node.children(&mut cursor);
-        let mut after_as = false;
-        for child in children {
-            let kind = child.kind();
-            match kind {
-                "format_keyword" | "format_mode" => continue,
-                "identifier" => {
-                    if after_as {
-                        span_id = Some(source.get_text(&child));
-                        after_as = false;
-                    } else {
-                        columns.push(source.get_text(&child));
-                    }
-                }
-                "," => continue,
-                "AS" | "as" => {
-                    // case-insensitive AS handled via grammar token
-                    after_as = true;
-                }
-                _ if kind.eq_ignore_ascii_case("as") => {
-                    after_as = true;
-                }
-                "format_setting_block" | "format_renaming_block" => break,
-                _ => {}
+        for child in node.children(&mut cursor) {
+            if child.kind() != "identifier" {
+                continue;
             }
+            if let Some(ref sid) = span_id_node {
+                if child.id() == sid.id() {
+                    continue;
+                }
+            }
+            columns.push(source.get_text(&child));
         }
     }
 
@@ -177,8 +176,7 @@ fn parse_setting_value(
         match child.kind() {
             "string" => {
                 let t = source.get_text(&child);
-                let unquoted = t.trim_matches('\'').to_string();
-                return Ok(SettingValue::String(unquoted));
+                return Ok(SettingValue::String(unquote_string(&t)));
             }
             "number" => {
                 let t = source.get_text(&child);
@@ -217,7 +215,7 @@ fn parse_renaming_pair(
         if past_arrow {
             if kind == "string" {
                 let t = source.get_text(&child);
-                rhs = Some(t.trim_matches('\'').to_string());
+                rhs = Some(unquote_string(&t));
             }
         } else {
             lhs = Some(match kind {
@@ -233,7 +231,7 @@ fn parse_renaming_pair(
                 }
                 "string" => {
                     let t = source.get_text(&child);
-                    RenamingLhs::Literal(t.trim_matches('\'').to_string())
+                    RenamingLhs::Literal(unquote_string(&t))
                 }
                 "identifier" => {
                     let t = source.get_text(&child);
@@ -269,4 +267,83 @@ pub fn extract_sql_from_table(source: &SourceTree<'_>) -> Option<String> {
         "(from_clause (table_ref table: (qualified_name (identifier) @t)))",
     );
     table_nodes.into_iter().next().map(|n| source.get_text(&n))
+}
+
+/// Unquote a single-quoted string literal as produced by the grammar.
+///
+/// Handles the SQL-style `''` doubled-quote escape and backslash escapes
+/// (`\n`, `\t`, `\r`, `\\`, `\'`, `\"`). Unknown `\x` escapes are kept
+/// verbatim.
+fn unquote_string(text: &str) -> String {
+    let inner = text
+        .strip_prefix('\'')
+        .and_then(|s| s.strip_suffix('\''))
+        .unwrap_or(text);
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\'' && chars.peek() == Some(&'\'') {
+            chars.next();
+            out.push('\'');
+        } else if c == '\\' {
+            match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('r') => out.push('\r'),
+                Some('\\') => out.push('\\'),
+                Some('\'') => out.push('\''),
+                Some('"') => out.push('"'),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+fn parse_label_clause(
+    source: &SourceTree<'_>,
+    node: &tree_sitter::Node<'_>,
+) -> Result<LabelClause> {
+    let mut out = LabelClause::default();
+    let assignments = source.find_nodes(node, "(label_assignment) @la");
+    for la in assignments {
+        // name (identifier inside label_type)
+        let name_nodes = source.find_nodes(&la, "(identifier) @n");
+        let name = name_nodes
+            .into_iter()
+            .next()
+            .map(|n| source.get_text(&n))
+            .ok_or_else(|| GgsqlError::ParseError("LABEL key missing".to_string()))?;
+
+        // value (string or null_literal)
+        let mut value: Option<String> = None;
+        let mut cursor = la.walk();
+        for child in la.children(&mut cursor) {
+            match child.kind() {
+                "string" => {
+                    value = Some(unquote_string(&source.get_text(&child)));
+                    break;
+                }
+                "null_literal" => {
+                    value = None;
+                    break;
+                }
+                _ => {}
+            }
+        }
+        let Some(value) = value else { continue };
+        match name.to_ascii_lowercase().as_str() {
+            "title" => out.title = Some(value),
+            "subtitle" => out.subtitle = Some(value),
+            "caption" => out.caption = Some(value),
+            _ => out.renames.push((name, value)),
+        }
+    }
+    Ok(out)
 }

@@ -606,7 +606,7 @@ module.exports = grammar({
     ),
 
     // Sub-clauses allowed inside a TABULATE statement
-    tab_clause: $ => $.format_clause,
+    tab_clause: $ => choice($.format_clause, $.label_clause),
 
     // FORMAT [SPAN | STUB] col [, col ...] [AS span_id]
     //   [SETTING key => value, ...]
@@ -1116,7 +1116,7 @@ module.exports = grammar({
       )
     )),
 
-    string: $ => seq("'", repeat(choice(/[^'\\]/, /\\./)), "'"),
+    string: $ => seq("'", repeat(choice(/[^'\\]/, /\\./, "''")), "'"),
 
     boolean: $ => choice('true', 'false'),
 

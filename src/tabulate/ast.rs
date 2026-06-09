@@ -12,6 +12,21 @@ pub struct TabulateStmt {
     pub from_source: Option<String>,
     /// Zero or more FORMAT clauses.
     pub format_clauses: Vec<FormatClause>,
+    /// Single LABEL clause (collapsed across the at-most-one allowed clause).
+    pub label: Option<LabelClause>,
+}
+
+/// A `LABEL key => '...', ...` clause.
+#[derive(Debug, Clone, Default)]
+pub struct LabelClause {
+    /// `title => '...'`
+    pub title: Option<String>,
+    /// `subtitle => '...'`
+    pub subtitle: Option<String>,
+    /// `caption => '...'` (rendered as gt's sourcenote).
+    pub caption: Option<String>,
+    /// All other `<id> => '...'` pairs (column or spanner labels, in source order).
+    pub renames: Vec<(String, String)>,
 }
 
 /// A `FORMAT [SPAN|STUB] col [, col] [AS id] [SETTING ...] [RENAMING ...]` clause.
