@@ -1,0 +1,32 @@
+-- Widths compose with spanners. Each child column under a spanner can fix
+-- its own CSS width via `FORMAT <col> SETTING width => '<css>'`, while
+-- the spanner header sized to the sum of its children.
+SELECT
+  'Acme'             AS company,
+  1200000            AS rev_q1, 1450000 AS rev_q2,
+  18                 AS hc_q1,  22      AS hc_q2 UNION ALL SELECT
+  'Globex',           980000,            1020000,
+                      12,                14               UNION ALL SELECT
+  'Initech',          540500,             612000,
+                       7,                  9              UNION ALL SELECT
+  'Umbrella',        2100000,            2310000,
+                      24,                28               UNION ALL SELECT
+  'Stark Industries',4800500,            5120500,
+                      55,                60
+TABULATE company, rev_q1, rev_q2, hc_q1, hc_q2
+FORMAT company
+  SETTING width => '180px'
+FORMAT rev_q1, rev_q2
+  SETTING width => '110px'
+  RENAMING * => '${:num %\'d}'
+FORMAT hc_q1, hc_q2
+  SETTING width => '70px', align => 'center'
+FORMAT SPAN rev_q1, rev_q2 AS revenue
+FORMAT SPAN hc_q1, hc_q2 AS headcount
+LABEL
+  revenue   => 'Revenue (USD)',
+  headcount => 'Headcount',
+  rev_q1    => 'Q1',
+  rev_q2    => 'Q2',
+  hc_q1     => 'Q1',
+  hc_q2     => 'Q2'

@@ -54,3 +54,5 @@ a browser:
 | [`12_nested_spanners.ggsql`](12_nested_spanners.ggsql) | Nested (stacked) spanners over spanners |
 | [`13_full_spanner_report.ggsql`](13_full_spanner_report.ggsql) | Phase 1–3 composed: stub + nested spanners + relabels + formatting + header |
 | [`14_widths_align.ggsql`](14_widths_align.ggsql) | `FORMAT col SETTING width => …, align => …` |
+| [`15_align_override.ggsql`](15_align_override.ggsql) | `SETTING align => …` overriding the auto-aligned default |
+| [`16_widths_with_spanner.ggsql`](16_widths_with_spanner.ggsql) | `SETTING width => …` composed with `FORMAT SPAN …` |
