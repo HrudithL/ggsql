@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# System build deps:
+#   - protobuf-compiler: substrait crate's build script needs protoc.
+#   - unixodbc + unixodbc-dev: ggsql's odbc reader links libodbc at runtime;
+#     without it, src/reader/odbc unit tests panic with "ODBC is not available".
+sudo apt-get update -qq
+sudo apt-get install -y -qq protobuf-compiler unixodbc unixodbc-dev
+
 # Toolchain
 rustup component add rustfmt clippy
 cargo install --locked tree-sitter-cli || true

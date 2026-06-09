@@ -1,6 +1,13 @@
 [env]
 LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_MATH_FUNCTIONS"
 
+# Note: cargo defaults to `nproc` parallel jobs. If you hit OOM during
+# bundled C++ builds (libduckdb-sys, rusqlite-sys), set CARGO_BUILD_JOBS
+# in the environment instead of pinning a low number here for everyone.
+
+[target.aarch64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
 [target.wasm32-unknown-unknown]
 rustflags = [
   "-C", "link-args=-z stack-size=16777216",

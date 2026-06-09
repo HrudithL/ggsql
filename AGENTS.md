@@ -3,14 +3,14 @@
 Read in this order:
 
 1. [/spec/GTSQL_AGENTBUILD_SPEC.md](../gtsql/GTSQL_AGENTBUILD_SPEC.md) —
-   goal, oracle, test loop, sandbox, phase order.
-2. [TABULATE_PLAN.md](TABULATE_PLAN.md) — the implementation contract for
-   this repo. Codifies the fixture-accurate syntax (which differs from the
-   prose in `/spec/GTSQL_PLAN.md` in a few places — see §5 of the plan) and
-   maps each phase to concrete modules under `src/tabulate/`.
-3. [/spec/GTSQL_PLAN.md](../gtsql/GTSQL_PLAN.md) — language reference. When
-   the prose conflicts with the fixtures, the fixtures win (see
-   `TABULATE_PLAN.md` §5 for the resolved deltas).
+   goal, oracle, normalization rule, phase order, sandbox, pass gate.
+2. [/spec/GTSQL_PLAN.md](../gtsql/GTSQL_PLAN.md) — language reference
+   (authoritative for syntax and semantics).
+3. [/spec/GTSQL_EXAMPLES.qmd](../gtsql/GTSQL_EXAMPLES.qmd) — example corpus
+   (each example is a fixture).
+4. [TABULATE_PLAN.md](TABULATE_PLAN.md) — implementation surfaces in this
+   repo (which file does what), phase-by-phase scope, and implementation
+   notes the spec leaves open.
 
 ## System prompt (paste into Copilot agent / Codex / Claude Code)
 
@@ -59,3 +59,50 @@ Stop conditions:
 
 `make check` runs fmt, clippy, tree-sitter tests, all cargo tests, and the
 fixture-diff suite.
+
+## Using cargo efficiently
+
+This workspace is heavy: `duckdb` and `rusqlite` are compiled from C++/C
+source via the `bundled` feature, the dependency graph is large (arrow,
+parquet, geozero, adbc, palette, ...), and a full `target/` directory can
+exceed 60 GB. Treat cargo invocations as expensive and minimise them.
+
+**Default to `cargo check`, not `cargo build` or `cargo test`.** `check`
+skips the linker, which is where most wall time goes (a `ggsql` test binary
+links a ~1–2 GB `libduckdb_sys` rlib). Use `check` to validate edits and
+only run `test` when you actually need to execute code.
+
+**Scope every invocation:**
+- One package: `cargo check -p ggsql` (not `--workspace`).
+- One test binary: `cargo test -p ggsql --test tabulate_fixtures`.
+- One fixture: `cargo test -p ggsql --test tabulate_fixtures -- <fixture>`
+  (filter is a substring match on test names).
+- Skip doctests when you don't need them: add `--lib --tests --bins`.
+
+**Avoid feature creep.** The `ggsql` crate defaults to
+`adbc,duckdb,sqlite,vegalite,parquet,builtin-data,odbc,spatial`. For TABULATE
+work you typically only need `duckdb,parquet,vegalite,builtin-data`. When a
+task does not touch a reader, build with
+`--no-default-features --features duckdb,parquet,vegalite,builtin-data` to
+cut compile time substantially. Run the full default feature set only as
+part of `make check` before opening a PR.
+
+**Do not run `cargo clean`** unless you are reclaiming disk or have reason
+to believe the cache is corrupt. Incremental compilation is the only thing
+making this workspace tolerable.
+
+**Do not run cargo commands in parallel** from the agent (do not background
+one `cargo` and start another). Cargo serialises on a per-target lock and
+the second invocation will simply block, doubling your wall time for no
+gain. Run one, wait, then run the next.
+
+**Parallelism is set by `nproc` by default.** If you see OOM kills during
+`libduckdb-sys` or `rusqlite-sys` C++ compilation, set
+`CARGO_BUILD_JOBS=4` (or lower) in the environment for that command rather
+than editing `.cargo/config.toml` — that config is shared with other
+contributors.
+
+**Heuristic for `make check`:** run it once at the start of a phase to
+confirm a clean baseline, then iterate with targeted `cargo test` calls,
+and only re-run `make check` when you believe the phase is complete or
+before committing. Do not run `make check` after every edit.

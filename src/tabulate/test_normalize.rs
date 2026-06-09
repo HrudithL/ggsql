@@ -12,7 +12,13 @@ use regex::Regex;
 pub fn normalize_html(input: &str) -> String {
     let mut s = input.to_string();
 
-    // 1. Strip id="abc..." on any root <table id="...">.
+    // 1a. Strip id="abc..." on any root <div id="...">.
+    s = Regex::new(r#"(<div\b[^>]*?)\s+id="[^"]*""#)
+        .unwrap()
+        .replace_all(&s, "$1")
+        .to_string();
+
+    // 1b. Strip id="abc..." on any root <table id="...">.
     s = Regex::new(r#"(<table\b[^>]*?)\s+id="[^"]*""#)
         .unwrap()
         .replace_all(&s, "$1")

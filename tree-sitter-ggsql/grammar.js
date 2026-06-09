@@ -26,10 +26,10 @@ module.exports = grammar({
   ],
 
   rules: {
-    // Main entry point - SQL followed by VISUALISE statements
+    // Main entry point - SQL followed by VISUALISE or TABULATE statements
     query: $ => seq(
       optional($.sql_portion),
-      repeat($.visualise_statement)
+      repeat(choice($.visualise_statement, $.tabulate_statement))
     ),
 
     // SQL portion - multiple statements separated by semicolons
@@ -579,6 +579,80 @@ module.exports = grammar({
       repeat(seq(',', $.table_ref))
     )),
 
+    // =========================================================================
+    // TABULATE statement and sub-clauses
+    // =========================================================================
+
+    // TABULATE [* | col, col, ...] [FROM source] [FORMAT ...] ...
+    tabulate_statement: $ => prec.dynamic(1, seq(
+      $.tabulate_keyword,
+      optional($.tab_col_list),
+      optional($.tab_from_clause),
+      repeat($.tab_clause)
+    )),
+
+    tabulate_keyword: $ => token(prec(10, caseInsensitive('TABULATE'))),
+
+    // Column list: wildcard or explicit comma-separated names
+    tab_col_list: $ => seq(
+      choice('*', $.identifier),
+      repeat(seq(',', $.identifier))
+    ),
+
+    // FROM <source> inside a TABULATE statement
+    tab_from_clause: $ => seq(
+      token(prec(1, caseInsensitive('FROM'))),
+      field('source', $.identifier)
+    ),
+
+    // Sub-clauses allowed inside a TABULATE statement
+    tab_clause: $ => $.format_clause,
+
+    // FORMAT [SPAN | STUB] col [, col ...] [AS span_id]
+    //   [SETTING key => value, ...]
+    //   [RENAMING lhs => rhs, ...]
+    format_clause: $ => prec.right(seq(
+      $.format_keyword,
+      optional($.format_mode),
+      $.identifier,
+      repeat(seq(',', $.identifier)),
+      optional(seq(caseInsensitive('AS'), field('span_id', $.identifier))),
+      optional($.format_setting_block),
+      optional($.format_renaming_block)
+    )),
+
+    format_keyword: $ => token(prec(5, caseInsensitive('FORMAT'))),
+
+    format_mode: $ => choice(
+      token(prec(3, caseInsensitive('SPAN'))),
+      token(prec(3, caseInsensitive('STUB')))
+    ),
+
+    format_setting_block: $ => seq(
+      token(prec(2, caseInsensitive('SETTING'))),
+      $.format_setting_pair,
+      repeat(seq(',', $.format_setting_pair))
+    ),
+
+    format_setting_pair: $ => seq(
+      field('name', $.identifier),
+      '=>',
+      field('value', choice($.string, $.number, $.boolean))
+    ),
+
+    format_renaming_block: $ => seq(
+      token(prec(2, caseInsensitive('RENAMING'))),
+      $.format_renaming_pair,
+      repeat(seq(',', $.format_renaming_pair))
+    ),
+
+    format_renaming_pair: $ => seq(
+      field('lhs', choice('*', $.number, $.string, $.identifier)),
+      '=>',
+      field('rhs', $.string)
+    ),
+
+    // =========================================================================
     // VISUALISE/VISUALIZE [global_mapping] [FROM source] with clauses
     // Global mapping sets default aesthetics for all layers
     // FROM source can be an identifier (table/CTE) or string (file path)

@@ -80,3 +80,12 @@ strip = true
 inherits = "release"
 opt-level = "z"
 panic = "abort"
+
+# Faster dev/test builds: no debuginfo for dependencies, line-tables-only for us.
+# Cuts link time and target/ disk usage noticeably without losing useful traces.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+opt-level = 0

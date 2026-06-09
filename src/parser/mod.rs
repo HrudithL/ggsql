@@ -42,6 +42,7 @@ use crate::{Plot, Result};
 
 pub mod builder;
 pub mod source_tree;
+pub mod tabulate;
 
 pub use builder::build_ast;
 pub use source_tree::SourceTree;

@@ -15,6 +15,7 @@ pub struct Validated {
     sql: String,
     visual: String,
     has_visual: bool,
+    has_tabulate: bool,
     tree: Option<tree_sitter::Tree>,
     valid: bool,
     errors: Vec<ValidationError>,
@@ -25,6 +26,11 @@ impl Validated {
     /// Whether the query contains a VISUALISE clause.
     pub fn has_visual(&self) -> bool {
         self.has_visual
+    }
+
+    /// Whether the query contains a TABULATE clause.
+    pub fn has_tabulate(&self) -> bool {
+        self.has_tabulate
     }
 
     /// The SQL portion (before VISUALISE).
@@ -112,6 +118,7 @@ pub fn validate(query: &str) -> Result<Validated> {
                 sql: String::new(),
                 visual: String::new(),
                 has_visual: false,
+                has_tabulate: false,
                 tree: None,
                 valid: false,
                 errors,
@@ -127,6 +134,9 @@ pub fn validate(query: &str) -> Result<Validated> {
     let root = source_tree.root();
     let visualise_stmt = source_tree.find_node(&root, "(visualise_statement) @viz");
     let has_visual = visualise_stmt.is_some();
+    let has_tabulate = source_tree
+        .find_node(&root, "(tabulate_statement) @tab")
+        .is_some();
 
     if let Err(e) = source_tree.validate() {
         // The lexer always tokenises VISUALISE / VISUALIZE as
@@ -166,6 +176,7 @@ pub fn validate(query: &str) -> Result<Validated> {
             sql: sql_part,
             visual: viz_part,
             has_visual,
+            has_tabulate,
             tree: Some(source_tree.tree),
             valid: false,
             errors,
@@ -179,6 +190,7 @@ pub fn validate(query: &str) -> Result<Validated> {
             sql: sql_part,
             visual: viz_part,
             has_visual: false,
+            has_tabulate,
             tree: None,
             valid: true,
             errors,
@@ -198,6 +210,7 @@ pub fn validate(query: &str) -> Result<Validated> {
                 sql: sql_part,
                 visual: viz_part,
                 has_visual,
+                has_tabulate,
                 tree: Some(source_tree.tree),
                 valid: false,
                 errors,
@@ -269,6 +282,7 @@ pub fn validate(query: &str) -> Result<Validated> {
         sql: sql_part,
         visual: viz_part,
         has_visual,
+        has_tabulate,
         tree: Some(source_tree.tree),
         valid: errors.is_empty(),
         errors,

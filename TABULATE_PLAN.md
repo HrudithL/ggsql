@@ -1,18 +1,32 @@
 # TABULATE — implementation plan for ggsql
 
-This document is the working implementation plan for the `TABULATE` clause in
-this repo. It is derived from the upstream spec but reflects the **syntax
-actually used by the captured fixtures**, which are the oracle the agent
-loop tests against. Where the prose in `/spec/GTSQL_PLAN.md` disagrees with
-`tests/fixtures/*/query.ggsql`, the fixtures win.
+This document is the working implementation plan for the `TABULATE` clause
+in this repo. The upstream spec in `/spec/` is **authoritative for syntax
+and semantics**; this plan maps that spec onto concrete modules under
+`src/tabulate/` and records implementation choices.
 
 Read in this order:
 
 1. [AGENTS.md](AGENTS.md) — agent rules, branches, stop conditions.
-2. [/spec/GTSQL_AGENTBUILD_SPEC.md](../gtsql/GTSQL_AGENTBUILD_SPEC.md) — phase
-   ordering, pass gate, sandbox.
-3. [/spec/GTSQL_PLAN.md](../gtsql/GTSQL_PLAN.md) — language reference (prose).
-4. This file — the implementation contract, plus syntax deltas vs the prose.
+2. [/spec/GTSQL_AGENTBUILD_SPEC.md](../gtsql/GTSQL_AGENTBUILD_SPEC.md) —
+   goal, oracle, normalization rule, phase order, pass gate, sandbox.
+3. [/spec/GTSQL_PLAN.md](../gtsql/GTSQL_PLAN.md) — language reference.
+4. [/spec/GTSQL_EXAMPLES.qmd](../gtsql/GTSQL_EXAMPLES.qmd) — example corpus
+   (each example becomes a fixture).
+5. This file — implementation surfaces and per-phase scope.
+
+> **Fixture freshness.** The captured fixtures in `tests/fixtures/` were
+> generated from an earlier spec revision and use the legacy formatter
+> syntax (`{:num ,d}`, `%-d`). The current spec uses printf form
+> (`{:num %'d}`) and standard strftime (`%d`). Before starting a new phase
+> branch, the human should re-run `make fixtures-capture` on the host so
+> `query.ggsql` files match the current spec. The implementation in this
+> repo must target the spec syntax — see §2.
+
+> **Spec markdown escaping.** The spec files write the printf thousands
+> flag as `%\'d` (backslash-quote) to keep the markdown source valid. The
+> actual format string the parser sees is `%'d` (one apostrophe). The
+> implementation accepts `%'d`, not `%\'d`.
 
 ---
 
@@ -93,57 +107,63 @@ an integer, and `30` becomes the literal string.
 
 #### `FORMAT ... RENAMING` RHS — string interpolation
 
-The RHS is a single-quoted string. Any text outside `{...}` is preserved as a
-literal prefix/suffix. The two formatter mini-languages are **`{:num ...}`**
-and **`{:time ...}`**, plus case transforms.
+The RHS is a single-quoted string. Any text outside `{...}` is preserved as
+a literal prefix/suffix. The two formatter mini-languages are
+**`{:num ...}`** and **`{:time ...}`**, plus case transforms.
 
-##### Numeric formatter `{:num <spec>}` — **delta from prose**
+##### Numeric formatter `{:num <printf-spec>}`
 
-The body after `{:num ` is a printf-like spec **with no leading `%`**. The
-fixtures use the form `{:num [flags][width][.precision]<conv>}`:
+The body after `{:num ` is a literal `printf(3)` conversion spec with a
+leading `%`. Examples from the spec corpus:
 
-| Spec              | Means                                  | Fixture |
-| ----------------- | -------------------------------------- | ------- |
-| `{:num .3f}`      | 3 decimal places                       | 11      |
-| `{:num ,d}`       | integer with thousands separators      | 12, 13  |
-| `{:num ,.2f}`     | float, 2 decimals, thousands seps      | 22      |
-| `{:num ,.1f}`     | float, 1 decimal, thousands seps       | 14, 30  |
-| `{:num .1f}`      | float, 1 decimal, no seps              | 14      |
-| `{:num .2e}`      | scientific notation, 2 decimals        | 15      |
-| `{:num +.1f}`     | float, 1 decimal, forced sign          | 33      |
+| Spec               | Means                                | Example call            |
+| ------------------ | ------------------------------------ | ----------------------- |
+| `{:num %.3f}`      | 3 decimal places                     | `fmt_number`            |
+| `{:num %'d}`       | integer with thousands separators    | `fmt_integer`           |
+| `{:num %'.2f}`     | float, 2 decimals, thousands seps    | `fmt_number(use_seps)`  |
+| `{:num %'.1f}`     | float, 1 decimal, thousands seps     | `fmt_number(use_seps)`  |
+| `{:num %.1f}%`     | percent, 1 decimal                   | `fmt_percent`           |
+| `{:num %.2e}`      | scientific notation, 2 decimals      | `fmt_scientific`        |
+| `{:num %+.1f}%`    | percent, forced sign, 1 decimal      | `fmt_percent(force_sign)`|
+| `${:num %'.2f}`    | currency — literal `$` prefix        | `fmt_currency("USD")`   |
 
-Flags supported: `,` (thousands separator), `+` (forced sign), `0` (zero
-pad). Conversions supported: `d` (integer), `f` (fixed-point float), `e`
-(scientific).
-
-> The GTSQL_PLAN.md prose shows specs with a leading `%`
-> (`{:num %\'.2f}`); the fixtures **do not** use `%` and use `,` for
-> thousands separation rather than `'`. Implement the fixture form. The `%`
-> form should be a parse error (or a "did you mean..." hint) so we don't
-> silently accept the wrong syntax.
+Flags supported: `'` (locale-aware thousands separator), `+` (forced
+sign), `0` (zero pad). Conversions supported: `d` (integer), `f` (fixed
+float), `e` (scientific).
 
 ##### Percent semantics
 
-A literal `%` suffix outside the `{...}` (e.g. `'{:num .1f}%'`) triggers
+A literal `%` suffix outside the `{...}` (e.g. `'{:num %.1f}%'`) triggers
 gt's `fmt_percent()` behavior: the value is **multiplied by 100** before
-formatting. Fixture 14 takes a proportion `0.085` and renders `8.5%`.
-Implement the same scaling when a trailing `%` is present.
+formatting. Spec example 14: a proportion of `0.085` renders as `8.5%`.
 
 ##### Time formatter `{:time <strftime>}`
 
-The body is a literal `strftime(3)` format string and the `%`s in it are
-real percent-introducers (because that is what strftime uses). gt's
-locale-aware rendering applies; per-column locale comes from `FORMAT ...
-SETTING locale => '...'` (no global locale — see open question 6 in the
-spec).
+The body is a `strftime`-style format string. Per the spec the format
+codes are standard strftime (`%d` for day, `%I` for 12-hour, `%H` for
+24-hour, `%B` for month name, etc.).
 
-| Spec                              | Fixture |
-| --------------------------------- | ------- |
-| `{:time %B %-d, %Y}`              | 16      |
-| `{:time %-d %B %Y}`               | 17      |
-| `{:time %-I:%M %p}`               | 17      |
-| `{:time %A, %B %-d, %Y at %-I:%M %p}` | 17  |
-| `{:time %A %-d %B %Y}` (`locale='fr'`) | 21 |
+**Implementation note (day/hour padding).** gt's named date styles
+(`date_style = "day_month_year"`, `time_style = "h_m_p"`, ...) render
+single-digit days and hours **unpadded** (“1 June 2026”, “3:45 PM”). The
+spec examples use `%d` and `%I` in GTSQL queries while their R counterparts
+call the named gt styles. The implementation must reproduce gt's output —
+i.e. `%d` and `%I` inside `{:time ...}` render unpadded so the captured
+HTML matches. Treat the strftime in `{:time ...}` as a gt-compatible
+format layer, not a strict `strftime(3)` passthrough.
+
+Per-column locale comes from `FORMAT ... SETTING locale => '...'`. There
+is no global locale (spec open-question 6).
+
+Examples from the corpus (spec syntax):
+
+| Spec                                       | Example |
+| ------------------------------------------ | ------- |
+| `{:time %B %d, %Y}`                        | 16      |
+| `{:time %d %B %Y}`                         | 17      |
+| `{:time %I:%M %p}`                         | 17      |
+| `{:time %A, %B %d, %Y at %I:%M %p}`        | 17      |
+| `{:time %A %d %B %Y}` (`locale='fr'`)      | 21      |
 
 ##### Case transforms
 
@@ -288,15 +308,19 @@ Phase order is mandatory. One feature branch per phase
 
 ### Phase 5 — number / time formatter mini-language + per-column locale (fixtures 11–17, 21)
 
-- `src/tabulate/format.rs`: tokenize `{:num <spec>}`, `{:time <spec>}`,
+- `src/tabulate/format.rs`: tokenize `{:num <printf>}`, `{:time <strftime>}`,
   `{:Title}` etc. inside a single-quoted RHS string. Preserve literal
   prefix/suffix.
-- Numeric: implement `,`, `+`, `0` flags; precision; conversions `d`, `f`, `e`.
-- Trailing literal `%` outside the `{...}` triggers ×100 scaling.
-- Currency is just `$` (or other) prefix outside `{...}` — no special case.
-- Time: pass the strftime string through with locale resolved per
-  `FORMAT ... SETTING locale => '...'`.
-- Reject the `%`-introducer prose form (`{:num %.2f}`) with a clear error.
+- Numeric: parse a real printf body with required `%` introducer.
+  Implement flags `'` (thousands), `+` (forced sign), `0` (zero pad);
+  precision; conversions `d`, `f`, `e`. Reject specs lacking `%` with a
+  clear error.
+- Trailing literal `%` outside the `{...}` triggers ×100 scaling. A
+  literal `%%` should not scale.
+- Currency is just a literal `$` (or other) prefix outside `{...}` — no
+  special case.
+- Time: render `%d`/`%I` unpadded to match gt's named-style output (see
+  §2.2 implementation note). Apply per-column locale.
 
 ### Phase 6 — null / zero / direct value mapping (fixtures 18, 19, 20)
 
@@ -338,7 +362,7 @@ Phase order is mandatory. One feature branch per phase
 - `FORMAT ... SETTING units => '<s>'` renders units in the column header
   (gt's `cols_units` semantics — inspect fixture 32 expected HTML for the
   exact markup, likely `<span class="gt_units">`).
-- `{:num +.1f}` forced-sign already done in phase 5; fixture 33 is the
+- `{:num %+.1f}` forced-sign already done in phase 5; fixture 33 is the
   acceptance test for it.
 
 ### Phase 11 — integration (fixture 34)
@@ -349,31 +373,42 @@ Phase order is mandatory. One feature branch per phase
 
 ---
 
-## 5. Deltas vs `/spec/GTSQL_PLAN.md`
+## 5. Implementation notes (do not relitigate per phase)
 
-Codify these once; do not relitigate during phase work.
+These are decisions baked in once so per-phase work does not rediscover
+them. The spec is authoritative for syntax; these notes capture
+implementation choices the spec does not pin down.
 
-1. **Numeric formatter uses no `%` introducer.** Prose: `{:num %\'.2f}`;
-   fixtures: `{:num ,.2f}`. Implement the fixture form. Reject the prose
-   form.
-2. **Thousands separator is `,` not `'`.** Same root cause as (1).
-3. **Percent suffix scales by 100.** `'{:num .1f}%'` on a value of `0.085`
-   renders `8.5%` (fixture 14).
-4. **`SETTING units` exists on `FORMAT`.** Not in the prose but used by
-   fixture 32. Add to the supported keys.
-5. **`AS` inside `TABULATE` is a column rename, not a label.** Per spec
-   open-question 3: `AS` only renames the column. Display text belongs to
-   `LABEL`. (The prose has example lines like
-   `TABULATE date, region, revenue AS 'Revenue ($)'` and
-   `FORMAT date AS 'Order Date'` that contradict this — ignore them.)
+1. **Printf body is a real printf spec.** Parse `{:num <spec>}` as printf:
+   `%`-introducer required; recognized flags `'` `+` `0`; conversions `d`
+   `f` `e`. Reject specs missing the `%`. Match `gt::fmt_*()` defaults
+   (e.g. `'${:num %'.2f}'` == `fmt_currency(currency = "USD")`).
+2. **Percent suffix outside the `{...}` scales by 100.** `'{:num %.1f}%'`
+   on `0.085` renders `8.5%`. Don't double-scale if the user writes
+   `'{:num %.1f}%%'` — a literal `%%` should not trigger scaling.
+3. **strftime in `{:time ...}` is gt-compatible, not strict strftime.** In
+   particular `%d` and `%I` render unpadded to match gt's named styles
+   (`date_style`, `time_style`). See §2.2 “Implementation note
+   (day/hour padding)”.
+4. **`SETTING units` exists on `FORMAT`** (spec example 32). Rendered in
+   the column header per gt's `cols_units` semantics (inspect spec
+   example 32 R code or captured HTML for exact markup).
+5. **`AS` inside `TABULATE` is a column rename, not a display label.**
+   Display text belongs to `LABEL` (spec open-question 3).
 6. **`AS <id>` after `FORMAT SPAN` is always a bareword.** Quoted strings
    are a parse error. The bareword is the default display label and the
    reference used by `LABEL` and nested `FORMAT SPAN`.
 7. **No global locale.** `locale` only via `FORMAT ... SETTING locale =>
    '...'` per column (spec open-question 6).
 8. **Named palettes from day one.** `TO viridis`, `TO RdYlGn` — reuse the
-   VISUALISE palette catalogue (spec open-question 7). Fixtures 22 and 24
-   require this in phase 7.
+   VISUALISE palette catalogue (spec open-question 7). Spec examples 22
+   and 24 require this in phase 7.
+9. **Captured fixtures may use legacy syntax.** Until
+   `make fixtures-capture` is re-run against the current spec, some
+   `query.ggsql` files use `{:num ,d}` / `%-d` instead of
+   `{:num %'d}` / `%d`. **Re-capture before starting any phase that
+   touches the formatter mini-language (phases 5, 6, 10, 11).** Phases 1–4
+   and 7–9 do not depend on the formatter syntax.
 
 ---
 
