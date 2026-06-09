@@ -1,7 +1,10 @@
+-- The minimal TABULATE query: just the bare `TABULATE` keyword after a
+-- SELECT renders every column from the result, in source order. No column
+-- list, no FORMAT, no LABEL — the whole table is the default.
 SELECT
   'Acme'             AS company, 120000 AS revenue, 18  AS employees UNION ALL SELECT
   'Globex',                       98000,             12 UNION ALL SELECT
   'Initech',                      54000,              7 UNION ALL SELECT
   'Umbrella',                    210000,             24 UNION ALL SELECT
   'Stark Industries',            480000,             55
-TABULATE company, revenue, employees
+TABULATE

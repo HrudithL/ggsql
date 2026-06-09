@@ -1,8 +1,9 @@
--- Bare `TABULATE` (no column list) shows every column from the preceding
--- SELECT, in source order. The explicit `TABULATE *` form is equivalent.
+-- `TABULATE *` is the explicit wildcard form: every column from the
+-- preceding SELECT, in source order. It is exactly equivalent to the bare
+-- `TABULATE` keyword shown in `01_minimal.ggsql`; the `*` is optional.
 SELECT
   date '2026-01-01' AS day, 'Acme'   AS company, 120000.50 AS revenue UNION ALL SELECT
   date '2026-01-02',         'Globex',             98000.00            UNION ALL SELECT
   date '2026-01-03',         'Initech',            54000.75            UNION ALL SELECT
   date '2026-01-04',         'Umbrella',          210000.10
-TABULATE
+TABULATE *

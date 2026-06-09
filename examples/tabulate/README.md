@@ -39,10 +39,10 @@ a browser:
 
 | File                                       | Demonstrates                                  |
 | ------------------------------------------ | --------------------------------------------- |
-| [`01_minimal.ggsql`](01_minimal.ggsql)     | Plain `TABULATE col, col, col`                |
-| [`02_reorder.ggsql`](02_reorder.ggsql)     | Column reordering via the TABULATE list       |
+| [`01_minimal.ggsql`](01_minimal.ggsql)     | Bare `TABULATE` — every column from the SELECT |
+| [`02_reorder.ggsql`](02_reorder.ggsql)     | Column selection / reordering via an explicit TABULATE list |
 | [`03_hide.ggsql`](03_hide.ggsql)           | `FORMAT col SETTING hide => true`             |
-| [`04_select_star.ggsql`](04_select_star.ggsql) | bare `TABULATE` showing every SELECT column  |
+| [`04_select_star.ggsql`](04_select_star.ggsql) | `TABULATE *` — explicit wildcard, equivalent to the bare form |
 | [`05_sql_filter.ggsql`](05_sql_filter.ggsql)   | `ORDER BY` / `LIMIT` before TABULATE      |
 | [`06_stub.ggsql`](06_stub.ggsql)           | `FORMAT STUB <col>` row-label column          |
 | [`07_title_subtitle.ggsql`](07_title_subtitle.ggsql) | `LABEL title => …, subtitle => …`   |
