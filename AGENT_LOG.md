@@ -17,3 +17,14 @@ the deviation or `allowed_diff` justification.
   `make css-extract` once to vendor real gt CSS.
 - `tests/fixtures/` is empty; human must run `make fixtures-capture` once on
   the host (R + gt + arrow) to populate it.
+
+## 2026-06-09 — phase 1 complete
+
+- Fixtures 01 (minimal table), 02 (column selection / reordering), and 09
+  (FORMAT hide) pass under strict normalization.
+- Branch `agent/tabulate-phase-1` merged into `main` (no-ff merge commit
+  `bfeba4a`); local feature branches `agent/tabulate-bootstrap` and
+  `agent/tabulate-phase-1` deleted. No push to origin.
+- New branch `agent/tabulate-phase-2` cut from `main` to begin phase 2
+  (FORMAT STUB + LABEL title/subtitle/caption + LABEL <col>, fixtures 03,
+  04, 05).
