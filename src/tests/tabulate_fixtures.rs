@@ -61,7 +61,11 @@ fn read_allowed_diff(meta_path: &Path) -> Vec<Regex> {
     let body = &cap[1];
     item_re
         .captures_iter(body)
-        .filter_map(|c| c.get(1).or_else(|| c.get(2)).map(|m| m.as_str().to_string()))
+        .filter_map(|c| {
+            c.get(1)
+                .or_else(|| c.get(2))
+                .map(|m| m.as_str().to_string())
+        })
         .filter_map(|p| Regex::new(&p).ok())
         .collect()
 }
@@ -184,6 +188,15 @@ fn fixture_07_two_side_by_side_spanners() {
 #[test]
 fn fixture_08_nested_stacked_spanners() {
     run_fixture("08_nested_stacked_spanners");
+}
+
+// ============================================================================
+// Phase 4 fixture tests: FORMAT <col> SETTING width / align.
+// ============================================================================
+
+#[test]
+fn fixture_10_column_widths_and_alignment() {
+    run_fixture("10_column_widths_and_alignment");
 }
 
 /// Render phase-1 fixtures to a viewable HTML page at

@@ -31,6 +31,23 @@ const TABLE_STYLE: &str = concat!(
     "border-left-color: #D3D3D3;"
 );
 
+// Same as TABLE_STYLE but with `width: auto;` swapped for the
+// fixed-layout pair gt emits when any column carries an explicit width.
+const TABLE_STYLE_FIXED: &str = concat!(
+    "-webkit-font-smoothing: antialiased; ",
+    "-moz-osx-font-smoothing: grayscale; ",
+    "font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, ",
+    "'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'; ",
+    "display: table; border-collapse: collapse; line-height: normal; ",
+    "margin-left: auto; margin-right: auto; color: #333333; font-size: 16px; ",
+    "font-weight: normal; font-style: normal; background-color: #FFFFFF; ",
+    "border-top-style: solid; border-top-width: 2px; ",
+    "border-top-color: #A8A8A8; border-right-style: none; border-right-width: 2px; ",
+    "border-right-color: #D3D3D3; border-bottom-style: solid; border-bottom-width: 2px; ",
+    "border-bottom-color: #A8A8A8; border-left-style: none; border-left-width: 2px; ",
+    "border-left-color: #D3D3D3; table-layout: fixed; width: 0px;"
+);
+
 const THEAD_STYLE: &str = "border-style: none;";
 
 const THEAD_TR_STYLE: &str = concat!(
@@ -169,6 +186,7 @@ const SOURCENOTE_TD_STYLE: &str = concat!(
 pub fn render(table: &TableIr) -> String {
     let id = generate_id();
     let mut out = String::with_capacity(4096);
+    let has_widths = table.columns.iter().any(|c| c.width.is_some());
 
     out.push_str(&format!(
         "<div id=\"{}\" style=\"{}\">\n  \n  ",
@@ -189,9 +207,26 @@ pub fn render(table: &TableIr) -> String {
         "<table class=\"gt_table\" \
          data-quarto-disable-processing=\"false\" \
          data-quarto-bootstrap=\"false\" \
-         style=\"{}\" bgcolor=\"#FFFFFF\">\n",
-        TABLE_STYLE
+         style=\"{}\"{} bgcolor=\"#FFFFFF\">\n",
+        if has_widths {
+            TABLE_STYLE_FIXED
+        } else {
+            TABLE_STYLE
+        },
+        if has_widths { " width=\"0\"" } else { "" },
     ));
+
+    // colgroup — gt emits this whenever any column has an explicit width.
+    if has_widths {
+        out.push_str("  <colgroup>\n");
+        for col in &table.columns {
+            match &col.width {
+                Some(w) => out.push_str(&format!("    <col style=\"width:{};\">\n", w)),
+                None => out.push_str("    <col>\n"),
+            }
+        }
+        out.push_str("  </colgroup>\n");
+    }
 
     // thead
     out.push_str(&format!("  <thead style=\"{}\">\n", THEAD_STYLE));
@@ -329,7 +364,15 @@ fn render_header(table: &TableIr) -> String {
         // Walk the forest collecting cells for this row.
         let mut cells: Vec<HeaderCell> = Vec::new();
         for node in &table.header_forest {
-            collect_header_cells(node, row, 0, max_height, &table.columns, table.stub_col, &mut cells);
+            collect_header_cells(
+                node,
+                row,
+                0,
+                max_height,
+                &table.columns,
+                table.stub_col,
+                &mut cells,
+            );
         }
         // Apply leftmost / rightmost padding suffix to spanner-outer cells.
         let n = cells.len();
