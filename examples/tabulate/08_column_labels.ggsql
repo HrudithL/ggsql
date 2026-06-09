@@ -1,0 +1,15 @@
+-- `LABEL <col> => '<str>'` overrides the column header without renaming
+-- the underlying column. `LABEL caption => '...'` adds a source-note row
+-- in the table footer.
+SELECT
+  'Acme'             AS company, 120000 AS revenue, 18 AS employees UNION ALL SELECT
+  'Globex',                       98000,             12              UNION ALL SELECT
+  'Initech',                      54000,              7              UNION ALL SELECT
+  'Umbrella',                    210000,             24              UNION ALL SELECT
+  'Stark Industries',            480000,             55
+TABULATE company, revenue, employees
+LABEL
+  company   => 'Customer',
+  revenue   => 'Revenue (USD)',
+  employees => 'Headcount',
+  caption   => 'Source: internal CRM extract, 2026-Q2'
