@@ -4,7 +4,7 @@
 //! is essentially empty. We emit the same inline-style HTML structure.
 
 use super::GT_DEFAULT_CSS;
-use crate::tabulate::execute::{ColAlign, ColMeta, TableIr};
+use crate::tabulate::execute::{ColAlign, ColMeta, HeaderNode, TableIr};
 use uuid::Uuid;
 
 // ============================================================================
@@ -39,6 +39,33 @@ const THEAD_TR_STYLE: &str = concat!(
     "border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; ",
     "border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; ",
     "border-right-width: 1px; border-right-color: #D3D3D3;"
+);
+
+// Spanner header rows: same border setup as THEAD_TR_STYLE but the bottom
+// border is rendered `hidden` so the spanner cell's own bottom border
+// (from `<div class="gt_column_spanner">`) is the visible separator.
+const SPANNER_TR_STYLE: &str = concat!(
+    "border-style: none; border-top-style: solid; ",
+    "border-top-width: 2px; border-top-color: #D3D3D3; ",
+    "border-bottom-width: 2px; border-bottom-color: #D3D3D3; border-left-style: none; ",
+    "border-left-width: 1px; border-left-color: #D3D3D3; border-right-style: none; ",
+    "border-right-width: 1px; border-right-color: #D3D3D3; border-bottom-style: hidden;"
+);
+
+// Spanner-cell base style: shared between spanner cells and the empty
+// placeholder cells that sit above a column whose row was lifted.
+const SPANNER_OUTER_BASE_PREFIX: &str = concat!(
+    "border-style: none; color: #333333; ",
+    "background-color: #FFFFFF; font-size: 100%; font-weight: normal; ",
+    "text-transform: inherit; padding-top: 0; padding-bottom: 0; "
+);
+
+// `gt_column_spanner` div style — the bottom border that visually marks the
+// spanner cell sits on the inner div, not the outer `<th>`.
+const SPANNER_DIV_STYLE: &str = concat!(
+    "border-bottom-style: solid; border-bottom-width: 2px; ",
+    "border-bottom-color: #D3D3D3; vertical-align: bottom; padding-top: 5px; ",
+    "padding-bottom: 5px; overflow-x: hidden; display: inline-block; width: 100%;"
 );
 
 const TH_BASE_STYLE: &str = concat!(
@@ -203,15 +230,8 @@ pub fn render(table: &TableIr) -> String {
         ));
     }
 
-    out.push_str(&format!(
-        "    <tr class=\"gt_col_headings\" style=\"{}\">\n",
-        THEAD_TR_STYLE
-    ));
-    for (i, col) in table.columns.iter().enumerate() {
-        let is_stub = Some(i) == table.stub_col;
-        out.push_str(&render_th(col, is_stub));
-    }
-    out.push_str("    </tr>\n  </thead>\n");
+    out.push_str(&render_header(table));
+    out.push_str("  </thead>\n");
 
     // tbody
     out.push_str(&format!(
@@ -250,7 +270,7 @@ fn generate_id() -> String {
     u[..10].to_string()
 }
 
-fn render_th(col: &ColMeta, is_stub: bool) -> String {
+fn render_th(col: &ColMeta, is_stub: bool, rowspan: usize) -> String {
     let align_str = match col.align {
         ColAlign::Left => "left",
         ColAlign::Right => "right",
@@ -269,14 +289,190 @@ fn render_th(col: &ColMeta, is_stub: bool) -> String {
     };
     format!(
         "      <th class=\"gt_col_heading gt_columns_bottom_border {}\" \
-         rowspan=\"1\" colspan=\"1\" scope=\"col\" id=\"{}\" \
+         rowspan=\"{}\" colspan=\"1\" scope=\"col\" id=\"{}\" \
          style=\"{}\" bgcolor=\"#FFFFFF\" valign=\"bottom\" align=\"{}\">{}</th>\n",
         gt_class,
+        rowspan,
         id,
         style,
         align_str,
         html_escape(&col.label)
     )
+}
+
+/// One cell in a header row, returned by the forest walk.
+struct HeaderCell {
+    /// Rendered `<th>...</th>` string, less the leftmost / rightmost padding
+    /// fix-up. For cells that are NOT spanner-class, this is the final
+    /// markup; for spanner-class cells, this carries placeholder tokens
+    /// `__LRPAD__` that get substituted to the leftmost/rightmost/interior
+    /// padding suffix.
+    markup: String,
+    /// Whether this cell uses `gt_column_spanner_outer` (and therefore needs
+    /// the leftmost / rightmost padding adjustment).
+    is_spanner_outer: bool,
+}
+
+/// Render the `<thead>` rows. Handles both flat (no spanners) and nested
+/// (spanner forest) tables.
+fn render_header(table: &TableIr) -> String {
+    let max_height = table
+        .header_forest
+        .iter()
+        .map(|n| n.height())
+        .max()
+        .unwrap_or(0);
+    let total_rows = max_height + 1;
+    let mut out = String::new();
+
+    for row in 0..total_rows {
+        // Walk the forest collecting cells for this row.
+        let mut cells: Vec<HeaderCell> = Vec::new();
+        for node in &table.header_forest {
+            collect_header_cells(node, row, 0, max_height, &table.columns, table.stub_col, &mut cells);
+        }
+        // Apply leftmost / rightmost padding suffix to spanner-outer cells.
+        let n = cells.len();
+        let last_idx = n.saturating_sub(1);
+        for (i, cell) in cells.iter_mut().enumerate() {
+            if !cell.is_spanner_outer {
+                continue;
+            }
+            let is_first = i == 0;
+            let is_last = i == last_idx;
+            let suffix = if is_last {
+                // Rightmost takes precedence when a cell is also first.
+                "padding-left: 4px; text-align: center; padding-right: 0;"
+            } else if is_first {
+                "padding-right: 4px; text-align: center; padding-left: 0;"
+            } else {
+                "padding-left: 4px; padding-right: 4px; text-align: center;"
+            };
+            cell.markup = cell.markup.replace("__LRPAD__", suffix);
+        }
+        // Row TR style: column row uses the standard thead tr; spanner rows
+        // use the hidden-bottom-border variant.
+        let tr_style = if row == max_height {
+            THEAD_TR_STYLE
+        } else {
+            SPANNER_TR_STYLE
+        };
+        let tr_class = if row == max_height {
+            "gt_col_headings"
+        } else {
+            "gt_col_headings gt_spanner_row"
+        };
+        out.push_str(&format!(
+            "    <tr class=\"{}\" style=\"{}\">\n",
+            tr_class, tr_style
+        ));
+        for cell in cells {
+            out.push_str(&cell.markup);
+        }
+        out.push_str("    </tr>\n");
+    }
+    out
+}
+
+/// Recursively gather cells for `row` from a header subtree.
+///
+/// `current_depth` is 0 for a top-level forest entry and incremented when
+/// recursing into a spanner's children.
+fn collect_header_cells(
+    node: &HeaderNode,
+    row: usize,
+    current_depth: usize,
+    max_height: usize,
+    columns: &[ColMeta],
+    stub_col: Option<usize>,
+    out: &mut Vec<HeaderCell>,
+) {
+    match node {
+        HeaderNode::Column { col_idx } => {
+            let col = &columns[*col_idx];
+            let is_stub = Some(*col_idx) == stub_col;
+            // Top-level columns get lifted into the lowest spanner row so they
+            // can rowspan into the column row alongside their spanner siblings.
+            // Nested columns sit on the column row.
+            let c_level = if current_depth == 0 && max_height > 0 {
+                max_height - 1
+            } else {
+                max_height
+            };
+            if row < c_level {
+                // Empty placeholder slot. Class matches a spanner cell so
+                // gt's CSS treats it uniformly.
+                let markup = format!(
+                    "      <th class=\"gt_center gt_columns_top_border gt_column_spanner_outer\" \
+                     rowspan=\"1\" colspan=\"1\" scope=\"col\" \
+                     style=\"{}__LRPAD__\" bgcolor=\"#FFFFFF\" align=\"center\"></th>\n",
+                    SPANNER_OUTER_BASE_PREFIX
+                );
+                out.push(HeaderCell {
+                    markup,
+                    is_spanner_outer: true,
+                });
+            } else if row == c_level {
+                let rowspan = max_height + 1 - row;
+                out.push(HeaderCell {
+                    markup: render_th(col, is_stub, rowspan),
+                    is_spanner_outer: false,
+                });
+            }
+            // row > c_level → covered by rowspan from earlier; skip.
+        }
+        HeaderNode::Spanner {
+            id: _,
+            label,
+            children,
+        } => {
+            let span_row = max_height - node.height();
+            let leaf_count = node.leaf_count();
+            if row < span_row {
+                // Placeholder covering all leaves of this spanner. Not
+                // observed in fixtures 6/7/8 (top-level spanners always sit at
+                // row 0); kept for completeness.
+                let markup = format!(
+                    "      <th class=\"gt_center gt_columns_top_border gt_column_spanner_outer\" \
+                     rowspan=\"1\" colspan=\"{}\" scope=\"col\" \
+                     style=\"{}__LRPAD__\" bgcolor=\"#FFFFFF\" align=\"center\"></th>\n",
+                    leaf_count, SPANNER_OUTER_BASE_PREFIX
+                );
+                out.push(HeaderCell {
+                    markup,
+                    is_spanner_outer: true,
+                });
+            } else if row == span_row {
+                let markup = format!(
+                    "      <th class=\"gt_center gt_columns_top_border gt_column_spanner_outer\" \
+                     rowspan=\"1\" colspan=\"{}\" scope=\"colgroup\" id=\"{}\" \
+                     style=\"{}__LRPAD__\" bgcolor=\"#FFFFFF\" align=\"center\">\n        \
+                     <div class=\"gt_column_spanner\" style=\"{}\">{}</div>\n      </th>\n",
+                    leaf_count,
+                    html_escape(label),
+                    SPANNER_OUTER_BASE_PREFIX,
+                    SPANNER_DIV_STYLE,
+                    html_escape(label),
+                );
+                out.push(HeaderCell {
+                    markup,
+                    is_spanner_outer: true,
+                });
+            } else {
+                for child in children {
+                    collect_header_cells(
+                        child,
+                        row,
+                        current_depth + 1,
+                        max_height,
+                        columns,
+                        stub_col,
+                        out,
+                    );
+                }
+            }
+        }
+    }
 }
 
 fn render_tr(

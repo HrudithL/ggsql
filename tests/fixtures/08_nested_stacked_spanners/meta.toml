@@ -3,4 +3,7 @@ title = "Nested (stacked) spanners"
 gt_version = "1.3.0"
 captured_at = "2026-06-04T00:32:05-0400"
 normalization_profile = "default"
-# allowed_diff = []  # add regex strings only with justification in AGENT_LOG.md
+# allowed_diff: the capture script set non-default ids `pop` and `den` on the
+# inner spanners; our standard rule (id == label) yields `Population` and
+# `Density`. Justification in AGENT_LOG.md (2026-06-09 phase-3 entry).
+allowed_diff = ['id="pop"|id="Population"', 'id="den"|id="Density"']
