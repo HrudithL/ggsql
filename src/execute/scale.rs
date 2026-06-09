@@ -1723,6 +1723,7 @@ mod tests {
             coord,
             aesthetics,
             properties: std::collections::HashMap::new(),
+            computed: std::collections::HashMap::new(),
         });
 
         // Create scale for pos2 (theta in polar) without explicit expand

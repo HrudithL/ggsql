@@ -774,6 +774,7 @@ mod tests {
             coord: Coord::cartesian(),
             aesthetics: vec!["y".to_string(), "x".to_string()],
             properties: HashMap::new(),
+            computed: HashMap::new(),
         });
         spec.labels = Some(Labels {
             labels: HashMap::from([
@@ -804,6 +805,7 @@ mod tests {
             coord: Coord::polar(),
             aesthetics: vec!["angle".to_string(), "radius".to_string()],
             properties: HashMap::new(),
+            computed: HashMap::new(),
         });
         spec.labels = Some(Labels {
             labels: HashMap::from([

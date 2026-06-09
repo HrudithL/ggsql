@@ -25,14 +25,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::plot::types::{validate_parameter, ParamDefinition};
-use crate::plot::ParameterValue;
+use crate::plot::{Layer, ParameterValue};
+use crate::reader::SqlDialect;
+use crate::DataFrame;
 
 // Coord type implementations
 mod cartesian;
+pub mod map;
+pub mod map_projections;
 mod polar;
 
 // Re-export coord type structs
 pub use cartesian::Cartesian;
+pub use map_projections::MapProjectionTrait;
 pub use polar::Polar;
 
 // =============================================================================
@@ -47,6 +52,8 @@ pub enum CoordKind {
     Cartesian,
     /// Polar coordinates (for pie charts, rose plots)
     Polar,
+    /// Map coordinates (for geographic/cartographic projections)
+    Map,
 }
 
 // =============================================================================
@@ -57,7 +64,7 @@ pub enum CoordKind {
 ///
 /// Each coord type implements this trait. The trait is intentionally minimal
 /// and backend-agnostic - no Vega-Lite or other writer-specific details.
-pub trait CoordTrait: std::fmt::Debug + std::fmt::Display + Send + Sync {
+pub trait CoordTrait: std::fmt::Debug + Send + Sync {
     /// Returns which coord type this is (for pattern matching)
     fn coord_kind(&self) -> CoordKind;
 
@@ -80,9 +87,12 @@ pub trait CoordTrait: std::fmt::Debug + std::fmt::Display + Send + Sync {
     }
 
     /// Resolve and validate properties.
+    /// `coord_type_name` is the user-facing name from the `PROJECT TO` clause (e.g. "mercator",
+    /// "crs"). Used to distinguish named projections from generic `crs` + `target`.
     /// Default implementation validates against default_properties.
     fn resolve_properties(
         &self,
+        _coord_type_name: Option<&str>,
         properties: &HashMap<String, ParameterValue>,
     ) -> Result<HashMap<String, ParameterValue>, String> {
         let defaults = self.default_properties();
@@ -122,6 +132,41 @@ pub trait CoordTrait: std::fmt::Debug + std::fmt::Display + Send + Sync {
 
         Ok(resolved)
     }
+
+    /// Downcast to `MapProjectionTrait` if this coord is a map projection.
+    fn as_map_projection(&self) -> Option<&dyn map_projections::MapProjectionTrait> {
+        None
+    }
+
+    /// Orchestrate projection transforms for all layers.
+    ///
+    /// Iterates layers and calls each geom's `apply_projection()`.
+    /// Override to add coord-specific setup (e.g., Map loads the spatial extension).
+    fn apply_projection_transforms(
+        &self,
+        layers: &[Layer],
+        layer_queries: &mut [String],
+        projection: &mut super::Projection,
+        dialect: &dyn SqlDialect,
+        _execute_query: &dyn Fn(&str) -> crate::Result<DataFrame>,
+    ) -> crate::Result<()> {
+        for (idx, layer) in layers.iter().enumerate() {
+            let columns: Vec<String> = layer
+                .mappings
+                .aesthetics
+                .keys()
+                .map(|k| crate::naming::aesthetic_column(k))
+                .collect();
+            layer_queries[idx] = layer.geom.apply_projection(
+                &layer_queries[idx],
+                projection,
+                dialect,
+                false,
+                &columns,
+            )?;
+        }
+        Ok(())
+    }
 }
 
 // =============================================================================
@@ -146,11 +191,20 @@ impl Coord {
         Self(Arc::new(Polar))
     }
 
+    /// Create a Map coord type from a projection name and properties.
+    pub fn map(name: &str, properties: &HashMap<String, ParameterValue>) -> Self {
+        Self(
+            map_projections::build_map_projection(Some(name), properties)
+                .expect("map coord name must be a known projection or 'map'"),
+        )
+    }
+
     /// Create a Coord from a CoordKind
     pub fn from_kind(kind: CoordKind) -> Self {
         match kind {
             CoordKind::Cartesian => Self::cartesian(),
             CoordKind::Polar => Self::polar(),
+            CoordKind::Map => Self::map("crs", &HashMap::new()),
         }
     }
 
@@ -178,9 +232,33 @@ impl Coord {
     /// Resolve and validate properties.
     pub fn resolve_properties(
         &self,
+        coord_type_name: Option<&str>,
         properties: &HashMap<String, ParameterValue>,
     ) -> Result<HashMap<String, ParameterValue>, String> {
-        self.0.resolve_properties(properties)
+        self.0.resolve_properties(coord_type_name, properties)
+    }
+
+    /// Downcast to `MapProjectionTrait` if this coord is a map projection.
+    pub fn as_map_projection(&self) -> Option<&dyn map_projections::MapProjectionTrait> {
+        self.0.as_map_projection()
+    }
+
+    /// Orchestrate projection transforms for all layers.
+    pub fn apply_projection_transforms(
+        &self,
+        layers: &[Layer],
+        layer_queries: &mut [String],
+        projection: &mut super::Projection,
+        dialect: &dyn SqlDialect,
+        execute_query: &dyn Fn(&str) -> crate::Result<DataFrame>,
+    ) -> crate::Result<()> {
+        self.0.apply_projection_transforms(
+            layers,
+            layer_queries,
+            projection,
+            dialect,
+            execute_query,
+        )
     }
 }
 
