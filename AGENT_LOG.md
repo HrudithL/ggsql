@@ -93,3 +93,17 @@ the deviation or `allowed_diff` justification.
   `id="Density"`; the outer `id="2016–2021 Comparison"` matches exactly
   because its `LABEL` row sets the spanner text. No expected.html was
   modified.
+
+## 2026-06-09 — phase 3 merged, phase 4 opened
+
+- Branch `agent/tabulate-phase-3` merged into `main` (no-ff merge commit
+  `62673f3`), followed by a fast-forward of `4f8b4c9` (example-source
+  polish: bare `TABULATE` in 04, `\'` escapes in 09/10/14). Feature
+  branches `agent/tabulate-phase-2` and `agent/tabulate-phase-3` deleted
+  locally. `main` pushed to `origin` (`HrudithL/ggsql`).
+- All 10 fixture tests pass (`fixture_01..09` + `fixture_06..08` + the
+  well-formedness check). `examples/tabulate/` now ships 14 demos with
+  rendered HTML at `examples/tabulate/out/index.html`.
+- New branch `agent/tabulate-phase-4` cut from `main` to begin phase 4
+  (`FORMAT <col> SETTING width => '<css>'` and `SETTING align => 'right'`,
+  fixture 10).
