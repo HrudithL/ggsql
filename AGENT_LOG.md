@@ -44,3 +44,17 @@ the deviation or `allowed_diff` justification.
   printf mini-language (forced sign, scientific, percent ×100, currency,
   per-column locale, `{:time ...}`) remains for phase 5.
 - No `allowed_diff` entries added.
+
+## 2026-06-09 — phase 2 merged, phase 3 opened
+
+- Branch `agent/tabulate-phase-2` merged into `main` (no-ff merge commit
+  `787981f`); feature branch deleted. No push to origin.
+- `make check` reproduces the same doctest-linker OOM kills (`ld
+  terminated with signal 9`) on `naming.rs` / `plot::scale::colour`
+  doctests seen at the phase 1 merge — these are sandbox memory pressure,
+  not a code regression (AGENTS.md notes `CARGO_BUILD_JOBS=4` as the
+  documented mitigation). All `cargo test -p ggsql --test
+  tabulate_fixtures` cases pass (7 / 7).
+- New branch `agent/tabulate-phase-3` cut from `main` to begin phase 3
+  (`FORMAT SPAN <cols> AS <id>` with nesting + LABEL through the spanner
+  namespace, fixtures 06, 07, 08).
