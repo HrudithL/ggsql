@@ -1,0 +1,15 @@
+-- `FORMAT <col> SETTING align => '<dir>'` overrides the automatic
+-- alignment. Numeric columns default to right-aligned; here we force the
+-- `score` column to center-aligned, and the text `team` column to
+-- right-aligned to demonstrate that the override works in both directions.
+SELECT
+  'Alpha'   AS team, 91 AS score UNION ALL SELECT
+  'Beta',            74           UNION ALL SELECT
+  'Gamma',           82           UNION ALL SELECT
+  'Delta',           68           UNION ALL SELECT
+  'Epsilon',         95
+TABULATE team, score
+FORMAT score
+  SETTING align => 'center'
+FORMAT team
+  SETTING align => 'right'
