@@ -11,7 +11,7 @@
 
 use crate::parser::{tabulate as tab_parser, SourceTree};
 use crate::reader::Reader;
-use crate::tabulate::ast::{FormatMode, SettingValue, TabulateStmt};
+use crate::tabulate::ast::{FormatMode, LabelClause, SettingValue, TabulateStmt};
 use crate::{GgsqlError, Result};
 use arrow::array::{Array, ArrayRef, Float64Array, StringArray};
 use arrow::datatypes::{DataType, Schema};
@@ -59,12 +59,22 @@ pub struct TableIr {
     pub columns: Vec<ColMeta>,
     /// Row data: one entry per row, values in same order as `columns`.
     pub rows: Vec<Vec<String>>,
+    /// Table title (gt's `tab_header(title=)`).
+    pub title: Option<String>,
+    /// Table subtitle (gt's `tab_header(subtitle=)`).
+    pub subtitle: Option<String>,
+    /// Source-note caption (gt's `tab_source_note()`).
+    pub caption: Option<String>,
+    /// Index into `columns` of the stub column, if any.
+    pub stub_col: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ColMeta {
-    /// Column name (used as header label and `id=` attribute).
+    /// Column name (used as `id=` attribute and `headers=` reference).
     pub name: String,
+    /// Display label shown in `<th>` (defaults to `name`).
+    pub label: String,
     /// Alignment.
     pub align: ColAlign,
 }
@@ -202,32 +212,101 @@ fn build_table_ir(
         .flat_map(|fc| fc.columns.iter().cloned())
         .collect();
 
+    // Stub column from `FORMAT STUB <col> [AS <span_id>]` (at most one).
+    let stub_info: Option<(String, Option<String>)> = tab_stmt
+        .format_clauses
+        .iter()
+        .find(|fc| fc.mode == FormatMode::Stub)
+        .and_then(|fc| fc.columns.first().map(|c| (c.clone(), fc.span_id.clone())));
+
     let visible_cols: Vec<&str> = display_cols
         .iter()
         .copied()
         .filter(|c| !hidden.iter().any(|h| h.eq_ignore_ascii_case(c)))
         .collect();
 
-    // Build column metadata with alignment.
-    let columns: Vec<ColMeta> = visible_cols
+    // Build a label-rename lookup keyed by lowercase column name AND by
+    // lowercase span_id (so `LABEL model_head => '...'` reaches both the
+    // stub column and any spanner sharing that id).
+    let mut label_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    if let Some(lc) = &tab_stmt.label {
+        for (k, v) in &lc.renames {
+            label_map.insert(k.to_ascii_lowercase(), v.clone());
+        }
+    }
+
+    // Build column metadata with alignment and resolved display label.
+    let mut columns: Vec<ColMeta> = visible_cols
         .iter()
         .map(|col_name| {
             let align = determine_alignment(col_name, orig_schema, combined);
+            let mut label = col_name.to_string();
+            if let Some(s) = label_map.get(&col_name.to_ascii_lowercase()) {
+                label = s.clone();
+            }
+            if let Some((stub_name, Some(span_id))) = &stub_info {
+                if stub_name.eq_ignore_ascii_case(col_name) {
+                    if let Some(s) = label_map.get(&span_id.to_ascii_lowercase()) {
+                        label = s.clone();
+                    }
+                }
+            }
             ColMeta {
                 name: col_name.to_string(),
+                label,
                 align,
             }
         })
         .collect();
 
+    // Stub columns: force alignment to left and remember the index.
+    let mut stub_col_idx: Option<usize> = None;
+    if let Some((stub_name, _)) = &stub_info {
+        if let Some(idx) = columns
+            .iter()
+            .position(|c| c.name.eq_ignore_ascii_case(stub_name))
+        {
+            columns[idx].align = ColAlign::Left;
+            stub_col_idx = Some(idx);
+        }
+    }
+
+    // Collect per-column number-format overrides from `RENAMING * => '...'`.
+    // Only the wildcard LHS with a `{:num <spec>}` body is recognised here;
+    // richer renaming support lands in later phases.
+    use crate::tabulate::ast::RenamingLhs;
+    let mut num_format_overrides: HashMap<String, String> = HashMap::new();
+    for fc in &tab_stmt.format_clauses {
+        if fc.mode != FormatMode::None {
+            continue;
+        }
+        for r in &fc.renamings {
+            if matches!(r.lhs, RenamingLhs::Wildcard) {
+                for col in &fc.columns {
+                    num_format_overrides.insert(col.to_ascii_lowercase(), r.rhs.clone());
+                }
+            }
+        }
+    }
+
     // 7. Format cell values.
-    // Build per-column formatters for numeric columns.
+    // Per-column formatters for numeric columns. If a `RENAMING * => '{:num ...}'`
+    // override exists, use the spec-driven formatter; otherwise fall back to
+    // gt's auto formatter.
     type Fmt = Box<dyn Fn(Option<f64>) -> String>;
     let formatters: HashMap<String, Fmt> = columns
         .iter()
         .filter_map(|cm| {
             let idx = combined.schema().index_of(&cm.name).ok()?;
             let col = combined.column(idx);
+            let override_spec = num_format_overrides
+                .get(&cm.name.to_ascii_lowercase())
+                .cloned();
+            if let Some(spec) = override_spec {
+                if let Some(f) = build_num_format(&spec) {
+                    return Some((cm.name.clone(), f));
+                }
+            }
             if let Some(fa) = col.as_any().downcast_ref::<Float64Array>() {
                 let values: Vec<Option<f64>> = (0..fa.len())
                     .map(|i| {
@@ -263,7 +342,24 @@ fn build_table_ir(
         })
         .collect();
 
-    Ok(TableIr { columns, rows })
+    let (title, subtitle, caption) = match &tab_stmt.label {
+        Some(LabelClause {
+            title,
+            subtitle,
+            caption,
+            ..
+        }) => (title.clone(), subtitle.clone(), caption.clone()),
+        None => (None, None, None),
+    };
+
+    Ok(TableIr {
+        columns,
+        rows,
+        title,
+        subtitle,
+        caption,
+        stub_col: stub_col_idx,
+    })
 }
 
 // ============================================================================
@@ -512,15 +608,10 @@ fn format_cell(
         return "NA".to_string();
     }
 
-    // Float64 column with custom formatter.
+    // Numeric column with custom formatter: convert through f64.
     if let Some(fmt) = formatter {
-        if let Some(fa) = col.as_any().downcast_ref::<Float64Array>() {
-            let v = if fa.is_null(row) {
-                None
-            } else {
-                Some(fa.value(row))
-            };
-            return fmt(v);
+        if let Some(v) = numeric_to_f64(col, row) {
+            return fmt(Some(v));
         }
     }
 
@@ -535,4 +626,187 @@ fn format_cell(
 
     // Fallback: use Arrow's display.
     arrow::util::display::array_value_to_string(col, row).unwrap_or_else(|_| "NA".to_string())
+}
+
+/// Try to read `(col, row)` as an `f64` regardless of integer/float width.
+/// Returns `None` for non-numeric types or null cells.
+fn numeric_to_f64(col: &ArrayRef, row: usize) -> Option<f64> {
+    use arrow::array::{
+        Float32Array, Int16Array, Int32Array, Int64Array, Int8Array, UInt16Array, UInt32Array,
+        UInt64Array, UInt8Array,
+    };
+    if col.is_null(row) {
+        return None;
+    }
+    let any = col.as_any();
+    if let Some(a) = any.downcast_ref::<Float64Array>() {
+        return Some(a.value(row));
+    }
+    if let Some(a) = any.downcast_ref::<Float32Array>() {
+        return Some(a.value(row) as f64);
+    }
+    if let Some(a) = any.downcast_ref::<Int64Array>() {
+        return Some(a.value(row) as f64);
+    }
+    if let Some(a) = any.downcast_ref::<Int32Array>() {
+        return Some(a.value(row) as f64);
+    }
+    if let Some(a) = any.downcast_ref::<Int16Array>() {
+        return Some(a.value(row) as f64);
+    }
+    if let Some(a) = any.downcast_ref::<Int8Array>() {
+        return Some(a.value(row) as f64);
+    }
+    if let Some(a) = any.downcast_ref::<UInt64Array>() {
+        return Some(a.value(row) as f64);
+    }
+    if let Some(a) = any.downcast_ref::<UInt32Array>() {
+        return Some(a.value(row) as f64);
+    }
+    if let Some(a) = any.downcast_ref::<UInt16Array>() {
+        return Some(a.value(row) as f64);
+    }
+    if let Some(a) = any.downcast_ref::<UInt8Array>() {
+        return Some(a.value(row) as f64);
+    }
+    None
+}
+
+// ============================================================================
+// `{:num <printf>}` formatter (phase 2 subset)
+// ============================================================================
+
+/// Build a number formatter from a renaming RHS like `{:num %'d}` or
+/// `{:num %.2f}`. Returns `None` if the spec is not a recognised
+/// `{:num ...}` template; later phases extend the spec language.
+fn build_num_format(rhs: &str) -> Option<Box<dyn Fn(Option<f64>) -> String>> {
+    // Pattern: optional literal prefix, `{:num <spec>}`, optional literal suffix.
+    let open = rhs.find("{:num ")?;
+    let after = &rhs[open + "{:num ".len()..];
+    let close = after.find('}')?;
+    let body = after[..close].trim();
+    let prefix = rhs[..open].to_string();
+    let suffix = rhs[open + "{:num ".len() + close + 1..].to_string();
+
+    // Phase 2 only supports integer formatting with the `'` (thousands) flag.
+    // Richer printf parsing lands in phase 5.
+    let spec = NumSpec::parse(body)?;
+    Some(Box::new(move |v: Option<f64>| match v {
+        None => "NA".to_string(),
+        Some(x) if x.is_nan() => "NA".to_string(),
+        Some(x) => format!("{}{}{}", prefix, spec.render(x), suffix),
+    }))
+}
+
+struct NumSpec {
+    /// Locale-aware thousands separator (`'` flag).
+    thousands: bool,
+    /// Conversion: `'d'`, `'f'`, etc.
+    conv: char,
+    /// Precision (digits after `.` for `f`); `None` if unspecified.
+    precision: Option<u32>,
+}
+
+impl NumSpec {
+    fn parse(body: &str) -> Option<Self> {
+        let mut s = body.strip_prefix('%')?;
+        let mut thousands = false;
+        // flags
+        loop {
+            match s.chars().next()? {
+                '\'' => {
+                    thousands = true;
+                    s = &s[1..];
+                }
+                '+' | '0' | '-' | ' ' | '#' => {
+                    s = &s[s.chars().next()?.len_utf8()..];
+                }
+                _ => break,
+            }
+        }
+        // width — ignore for now
+        while s.chars().next()?.is_ascii_digit() {
+            s = &s[1..];
+        }
+        // precision
+        let mut precision: Option<u32> = None;
+        if let Some(rest) = s.strip_prefix('.') {
+            let mut n: u32 = 0;
+            let mut consumed = 0;
+            for c in rest.chars() {
+                if let Some(d) = c.to_digit(10) {
+                    n = n * 10 + d;
+                    consumed += 1;
+                } else {
+                    break;
+                }
+            }
+            precision = Some(n);
+            s = &rest[consumed..];
+        }
+        let conv = s.chars().next()?;
+        Some(NumSpec {
+            thousands,
+            conv,
+            precision,
+        })
+    }
+
+    fn render(&self, x: f64) -> String {
+        match self.conv {
+            'd' => {
+                let n = x.round() as i64;
+                if self.thousands {
+                    insert_thousands(n)
+                } else {
+                    format!("{}", n)
+                }
+            }
+            'f' => {
+                let p = self.precision.unwrap_or(6) as usize;
+                let s = format!("{:.*}", p, x);
+                if self.thousands {
+                    let (sign, rest) = if let Some(r) = s.strip_prefix('-') {
+                        ("-", r)
+                    } else {
+                        ("", s.as_str())
+                    };
+                    let (int_part, frac_part) = match rest.find('.') {
+                        Some(i) => (&rest[..i], &rest[i..]),
+                        None => (rest, ""),
+                    };
+                    let int_n: i64 = int_part.parse().unwrap_or(0);
+                    format!("{}{}{}", sign, insert_thousands(int_n), frac_part)
+                } else {
+                    s
+                }
+            }
+            _ => format!("{}", x),
+        }
+    }
+}
+
+fn insert_thousands(n: i64) -> String {
+    let neg = n < 0;
+    let mut abs = if neg {
+        (n as i128).unsigned_abs().to_string()
+    } else {
+        n.to_string()
+    };
+    let bytes = abs.as_bytes().to_vec();
+    let len = bytes.len();
+    let mut out = String::with_capacity(len + len / 3);
+    for (i, b) in bytes.iter().enumerate() {
+        let from_end = len - i;
+        if i > 0 && from_end % 3 == 0 {
+            out.push(',');
+        }
+        out.push(*b as char);
+    }
+    abs.clear();
+    if neg {
+        format!("-{}", out)
+    } else {
+        out
+    }
 }

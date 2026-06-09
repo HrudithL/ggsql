@@ -114,6 +114,25 @@ fn fixture_09_hide_a_column() {
     run_fixture("09_hide_a_column");
 }
 
+// ============================================================================
+// Phase 2 fixture tests
+// ============================================================================
+
+#[test]
+fn fixture_03_stub_from_a_row_label_column() {
+    run_fixture("03_stub_from_a_row_label_column");
+}
+
+#[test]
+fn fixture_04_header_with_title_and_subtitle() {
+    run_fixture("04_header_with_title_and_subtitle");
+}
+
+#[test]
+fn fixture_05_header_source_note_caption_column_labels() {
+    run_fixture("05_header_source_note_caption_column_labels");
+}
+
 /// Render phase-1 fixtures to a viewable HTML page at
 /// `target/tabulate_demo.html`. Ignored by default; run with
 /// `cargo test --test tabulate_fixtures emit_demo -- --include-ignored --nocapture`.
