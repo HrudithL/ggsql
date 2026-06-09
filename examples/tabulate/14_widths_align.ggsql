@@ -1,0 +1,17 @@
+-- `FORMAT <col> SETTING width => '<css>'` fixes a column to a CSS width,
+-- switching the table to `table-layout: fixed`. `SETTING align => '...'`
+-- overrides the auto-aligned default ('left', 'right', or 'center').
+SELECT
+  'Acme'             AS company, 1200000 AS revenue, 18 AS employees UNION ALL SELECT
+  'Globex',                       980000,            12              UNION ALL SELECT
+  'Initech',                      540500,             7              UNION ALL SELECT
+  'Umbrella',                    2100000,            24              UNION ALL SELECT
+  'Stark Industries',            4800500,            55
+TABULATE company, revenue, employees
+FORMAT company
+  SETTING width => '200px'
+FORMAT revenue
+  SETTING width => '120px', align => 'right'
+  RENAMING * => '{:num %\'d}'
+FORMAT employees
+  SETTING width => '100px', align => 'center'

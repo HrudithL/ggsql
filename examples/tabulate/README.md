@@ -3,8 +3,9 @@
 Runnable `.ggsql` examples that exercise the TABULATE surface implemented
 so far — phase 1 (column selection / reordering / hide / `*`), phase 2
 (`FORMAT STUB`, `LABEL title/subtitle/caption`, per-column header relabels,
-and basic `{:num ...}` formatters), and phase 3 (`FORMAT SPAN <cols> AS
-<id>` with nesting + `LABEL` through the spanner namespace).
+and basic `{:num ...}` formatters), phase 3 (`FORMAT SPAN <cols> AS
+<id>` with nesting + `LABEL` through the spanner namespace), and phase 4
+(`FORMAT <col> SETTING width / align`).
 
 ## Run all examples
 
@@ -52,3 +53,4 @@ a browser:
 | [`11_two_spanners.ggsql`](11_two_spanners.ggsql) | Two side-by-side spanners + `LABEL <id> => …` |
 | [`12_nested_spanners.ggsql`](12_nested_spanners.ggsql) | Nested (stacked) spanners over spanners |
 | [`13_full_spanner_report.ggsql`](13_full_spanner_report.ggsql) | Phase 1–3 composed: stub + nested spanners + relabels + formatting + header |
+| [`14_widths_align.ggsql`](14_widths_align.ggsql) | `FORMAT col SETTING width => …, align => …` |

@@ -82,6 +82,10 @@ pub struct ColMeta {
     pub label: String,
     /// Alignment.
     pub align: ColAlign,
+    /// Explicit column width from `FORMAT <col> SETTING width => '<css>'`.
+    /// When any column carries a width, the renderer emits a `<colgroup>`
+    /// and switches the table style to `table-layout: fixed`.
+    pub width: Option<String>,
 }
 
 /// Node in the header tree. Spanners group child nodes (which may be
@@ -107,9 +111,7 @@ impl HeaderNode {
     pub fn leaf_count(&self) -> usize {
         match self {
             HeaderNode::Column { .. } => 1,
-            HeaderNode::Spanner { children, .. } => {
-                children.iter().map(|c| c.leaf_count()).sum()
-            }
+            HeaderNode::Spanner { children, .. } => children.iter().map(|c| c.leaf_count()).sum(),
         }
     }
 
@@ -307,11 +309,47 @@ fn build_table_ir(
         }
     }
 
+    // Per-column width / align overrides from `FORMAT <col> SETTING ...`.
+    let mut width_overrides: HashMap<String, String> = HashMap::new();
+    let mut align_overrides: HashMap<String, ColAlign> = HashMap::new();
+    for fc in &tab_stmt.format_clauses {
+        if fc.mode != FormatMode::None {
+            continue;
+        }
+        for s in &fc.settings {
+            if s.key.eq_ignore_ascii_case("width") {
+                if let SettingValue::String(v) = &s.value {
+                    for col in &fc.columns {
+                        width_overrides.insert(col.to_ascii_lowercase(), v.clone());
+                    }
+                }
+            } else if s.key.eq_ignore_ascii_case("align") {
+                if let SettingValue::String(v) = &s.value {
+                    let align = match v.to_ascii_lowercase().as_str() {
+                        "left" => Some(ColAlign::Left),
+                        "right" => Some(ColAlign::Right),
+                        "center" => Some(ColAlign::Center),
+                        _ => None,
+                    };
+                    if let Some(a) = align {
+                        for col in &fc.columns {
+                            align_overrides.insert(col.to_ascii_lowercase(), a);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Build column metadata with alignment and resolved display label.
     let mut columns: Vec<ColMeta> = visible_cols
         .iter()
         .map(|col_name| {
-            let align = determine_alignment(col_name, orig_schema, combined);
+            let auto_align = determine_alignment(col_name, orig_schema, combined);
+            let align = align_overrides
+                .get(&col_name.to_ascii_lowercase())
+                .copied()
+                .unwrap_or(auto_align);
             let is_stub = stub_info
                 .as_ref()
                 .map(|(n, _)| n.eq_ignore_ascii_case(col_name))
@@ -334,10 +372,12 @@ fn build_table_ir(
                     }
                 }
             }
+            let width = width_overrides.get(&col_name.to_ascii_lowercase()).cloned();
             ColMeta {
                 name: col_name.to_string(),
                 label,
                 align,
+                width,
             }
         })
         .collect();
