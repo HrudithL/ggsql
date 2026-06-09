@@ -9,7 +9,7 @@ SELECT
 TABULATE company, revenue, employees
 FORMAT STUB company
 FORMAT revenue, employees
-  RENAMING * => '{:num %''d}'
+  RENAMING * => '{:num %\'d}'
 LABEL
   title     => 'Top customers, FY26',
   subtitle  => 'Revenue and headcount snapshot',

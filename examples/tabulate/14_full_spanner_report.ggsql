@@ -15,7 +15,7 @@ FORMAT SPAN revenue_2025, employees_2025 AS y2025
 FORMAT SPAN revenue_2026, employees_2026 AS y2026
 FORMAT SPAN y2025, y2026                 AS snapshot
 FORMAT revenue_2025, revenue_2026, employees_2025, employees_2026
-  RENAMING * => '{:num %''d}'
+  RENAMING * => '{:num %\'d}'
 LABEL
   revenue_2025   => 'Revenue (USD)',
   employees_2025 => 'Headcount',
