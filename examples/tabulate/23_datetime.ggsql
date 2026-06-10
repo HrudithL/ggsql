@@ -1,0 +1,20 @@
+-- Date, time, and datetime columns can all be formatted in one table,
+-- each with its own `{:time ...}` template. Temporal columns
+-- automatically right-align.
+SELECT
+  CAST('2015-01-15' AS DATE)             AS the_date,
+  CAST('13:35:00'   AS TIME)             AS the_time,
+  CAST('2018-01-01 02:22:00' AS TIMESTAMP) AS the_datetime UNION ALL SELECT
+  CAST('2015-06-04' AS DATE),
+  CAST('08:05:00'   AS TIME),
+  CAST('2018-07-04 14:30:00' AS TIMESTAMP)               UNION ALL SELECT
+  CAST('2015-11-22' AS DATE),
+  CAST('22:15:00'   AS TIME),
+  CAST('2018-12-31 23:59:00' AS TIMESTAMP)
+TABULATE the_date, the_time, the_datetime
+FORMAT the_date
+  RENAMING * => '{:time %-d %B %Y}'
+FORMAT the_time
+  RENAMING * => '{:time %-I:%M %p}'
+FORMAT the_datetime
+  RENAMING * => '{:time %A, %B %-d, %Y at %-I:%M %p}'

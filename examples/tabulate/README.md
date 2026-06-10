@@ -4,8 +4,10 @@ Runnable `.ggsql` examples that exercise the TABULATE surface implemented
 so far — phase 1 (column selection / reordering / hide / `*`), phase 2
 (`FORMAT STUB`, `LABEL title/subtitle/caption`, per-column header relabels,
 and basic `{:num ...}` formatters), phase 3 (`FORMAT SPAN <cols> AS
-<id>` with nesting + `LABEL` through the spanner namespace), and phase 4
-(`FORMAT <col> SETTING width / align`).
+<id>` with nesting + `LABEL` through the spanner namespace), phase 4
+(`FORMAT <col> SETTING width / align`), and phase 5 (the full
+`{:num <printf>}` and `{:time <strftime>}` formatter mini-language plus
+per-column `SETTING locale => '...'`).
 
 ## Run all examples
 
@@ -56,3 +58,11 @@ a browser:
 | [`14_widths_align.ggsql`](14_widths_align.ggsql) | `FORMAT col SETTING width => …, align => …` |
 | [`15_align_override.ggsql`](15_align_override.ggsql) | `SETTING align => …` overriding the auto-aligned default |
 | [`16_widths_with_spanner.ggsql`](16_widths_with_spanner.ggsql) | `SETTING width => …` composed with `FORMAT SPAN …` |
+| [`17_num_decimals.ggsql`](17_num_decimals.ggsql) | `{:num .3f}` — fixed decimal places |
+| [`18_num_thousands.ggsql`](18_num_thousands.ggsql) | `{:num ,d}` — integer with thousands separators |
+| [`19_currency.ggsql`](19_currency.ggsql) | `${:num ,d}` — literal currency prefix with separators |
+| [`20_percent.ggsql`](20_percent.ggsql) | `{:num .1f}%` — trailing `%` multiplies the value by 100 |
+| [`21_scientific.ggsql`](21_scientific.ggsql) | `{:num .2e}` — scientific notation with HTML `<sup>` exponent |
+| [`22_dates.ggsql`](22_dates.ggsql) | `{:time %B %-d, %Y}` — date formatting with strftime directives |
+| [`23_datetime.ggsql`](23_datetime.ggsql) | Mixed date / time / datetime columns with `{:time ...}` |
+| [`24_french_locale.ggsql`](24_french_locale.ggsql) | `SETTING locale => 'fr'` for French month and weekday names |

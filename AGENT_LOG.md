@@ -123,3 +123,41 @@ the deviation or `allowed_diff` justification.
 - New example `examples/tabulate/14_widths_align.ggsql` demonstrates width
   + align settings; README updated.
 - No `allowed_diff` entries added.
+
+## 2026-06-09 — phase 5 complete
+
+- Fixtures 11 (`{:num .3f}`), 12 (`{:num ,d}`), 13 (currency prefix
+  `${:num ,d}`), 14 (percent suffix `{:num .1f}%` with ×100 scaling),
+  15 (scientific `{:num .2e}` with HTML `<sup>` + Unicode minus),
+  16 / 17 (`{:time ...}` on date, time, datetime), and 21 (per-column
+  `SETTING locale => 'fr'`) all pass under strict normalization. 19/19
+  TABULATE fixture tests green.
+- New module `src/tabulate/format.rs` houses the printf/strftime
+  mini-language with `CellFmt` (Numeric / Time) and `build_format()`.
+  Numeric supports both legacy and `%`-prefixed printf syntax; flags
+  `'`/`,` are thousands, `+` is forced sign; conversions `d`, `f`, `e`.
+  Scientific output is raw HTML (`1.00&nbsp;×&nbsp;10<sup>−6</sup>`,
+  U+2212 minus) and sets the column's new `raw_html` flag so the renderer
+  skips HTML-escaping. Time uses chrono and parses Arrow's canonical
+  ISO forms; supports `%-d` / `%-I` pad-stripping. Locale arrays for
+  `en` and `fr` are hardcoded (chrono `unstable-locales` is not pulled in).
+- `execute.rs`: `ColMeta` gained `raw_html: bool`; time formatters
+  promote the column alignment to `right` (matching gt's auto behaviour
+  for temporal data) and dispatch via Arrow `array_value_to_string` for
+  `Date32`/`Date64`/`Time*`/`Timestamp*` columns so the same `{:time ...}`
+  template works whether the column comes from a parquet string column
+  (fixtures) or a native DuckDB temporal cast (examples).
+- `html.rs`: stub column heading is always rendered `gt_left` /
+  `align="left"` regardless of the data alignment of the stub body cells
+  (matches gt's convention seen in fixture 14, where the stub is numeric
+  but its column heading is still left-aligned). Body cells use a column's
+  `raw_html` to choose between `html_escape(value)` and the raw string.
+- `tests/fixtures/14_percent_formatting_from_proportions/query.ggsql`
+  rewritten to operate on the materialized `monthly` table (the captured
+  query referenced `pizzaplace.date` which is not in `data.parquet`).
+  Expected HTML untouched.
+- New examples 17–24 demonstrate each phase-5 surface
+  (`17_num_decimals`, `18_num_thousands`, `19_currency`, `20_percent`,
+  `21_scientific`, `22_dates`, `23_datetime`, `24_french_locale`); README
+  updated; `examples/tabulate/out/index.html` regenerated.
+- No `allowed_diff` entries added.
