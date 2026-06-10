@@ -8,6 +8,7 @@
 
 pub mod ast;
 pub mod execute;
+pub mod format;
 pub mod html;
 pub mod test_normalize;
 

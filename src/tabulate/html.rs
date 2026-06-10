@@ -153,6 +153,8 @@ const TITLE_ONLY_TD_STYLE: &str = concat!(
 
 // Stub column body cell (`<th>` inside `<tbody>`). Same base as `<td>` plus
 // gt's stub-specific overrides (right-border, font-weight initial, etc.).
+// The trailing `text-align` (and `font-variant-numeric` for right-aligned
+// numeric stubs) is appended dynamically per row in `render_tr`.
 const STUB_TH_STYLE: &str = concat!(
     "border-style: none; padding-top: 8px; padding-bottom: 8px; margin: 10px; ",
     "border-top-style: solid; border-top-width: 1px; border-top-color: #D3D3D3; ",
@@ -161,7 +163,7 @@ const STUB_TH_STYLE: &str = concat!(
     "color: #333333; background-color: #FFFFFF; font-size: 100%; ",
     "font-weight: initial; text-transform: inherit; ",
     "border-right-style: solid; border-right-width: 2px; border-right-color: #D3D3D3; ",
-    "padding-left: 5px; padding-right: 5px; text-align: left;"
+    "padding-left: 5px; padding-right: 5px;"
 );
 
 const TFOOT_STYLE: &str = "border-style: none;";
@@ -306,14 +308,18 @@ fn generate_id() -> String {
 }
 
 fn render_th(col: &ColMeta, is_stub: bool, rowspan: usize) -> String {
-    let align_str = match col.align {
+    // gt always renders the stub column heading as left-aligned regardless
+    // of the underlying data type (the body cells follow the data alignment
+    // — see `render_tr`).
+    let align = if is_stub { ColAlign::Left } else { col.align };
+    let align_str = match align {
         ColAlign::Left => "left",
         ColAlign::Right => "right",
         ColAlign::Center => "center",
     };
-    let gt_class = col.align.gt_class();
+    let gt_class = align.gt_class();
     let mut style = format!("{} text-align: {};", TH_BASE_STYLE, align_str);
-    if col.align.tabular_nums() {
+    if align.tabular_nums() {
         style.push_str(" font-variant-numeric: tabular-nums;");
     }
     // Stub columns use the special `a::stub` id slot in gt's HTML.
@@ -531,12 +537,26 @@ fn render_tr(
     let stub_id = stub_col.map(|_| format!("stub_1_{}", row_idx + 1));
     for (i, (value, col)) in row.iter().zip(columns.iter()).enumerate() {
         let cell = if Some(i) == stub_col {
-            // Stub <th> in tbody.
+            // Stub <th> in tbody. Alignment / numeric styling tracks the
+            // column's resolved alignment (numeric stubs render right).
+            let align = col.align;
+            let align_str = match align {
+                ColAlign::Left => "left",
+                ColAlign::Right => "right",
+                ColAlign::Center => "center",
+            };
+            let gt_class = align.gt_class();
+            let mut style = format!("{} text-align: {};", STUB_TH_STYLE, align_str);
+            if align.tabular_nums() {
+                style.push_str(" font-variant-numeric: tabular-nums;");
+            }
             format!(
-                "<th id=\"{}\" scope=\"row\" class=\"gt_row gt_left gt_stub\" style=\"{}\" \
-                 valign=\"middle\" bgcolor=\"#FFFFFF\" align=\"left\">{}</th>",
+                "<th id=\"{}\" scope=\"row\" class=\"gt_row {} gt_stub\" style=\"{}\" \
+                 valign=\"middle\" bgcolor=\"#FFFFFF\" align=\"{}\">{}</th>",
                 stub_id.as_deref().unwrap_or(""),
-                STUB_TH_STYLE,
+                gt_class,
+                style,
+                align_str,
                 html_escape(value)
             )
         } else {
@@ -555,14 +575,15 @@ fn render_tr(
                 Some(sid) => format!("{} {}", sid, col.name),
                 None => col.name.clone(),
             };
+            let cell_text = if col.raw_html {
+                value.clone()
+            } else {
+                html_escape(value)
+            };
             format!(
                 "<td headers=\"{}\" class=\"gt_row {}\" style=\"{}\" \
                  valign=\"middle\" align=\"{}\">{}</td>",
-                headers,
-                gt_class,
-                style,
-                align_str,
-                html_escape(value)
+                headers, gt_class, style, align_str, cell_text
             )
         };
         if i == 0 {

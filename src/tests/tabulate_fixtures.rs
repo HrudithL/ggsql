@@ -199,6 +199,51 @@ fn fixture_10_column_widths_and_alignment() {
     run_fixture("10_column_widths_and_alignment");
 }
 
+// ============================================================================
+// Phase 5 fixture tests: FORMAT … RENAMING * => '{:num …}' / '{:time …}'
+// (number / time formatter mini-language, per-column locale).
+// ============================================================================
+
+#[test]
+fn fixture_11_number_formatting_3_decimals_no_separators() {
+    run_fixture("11_number_formatting_3_decimals_no_separators");
+}
+
+#[test]
+fn fixture_12_integer_formatting_with_digit_separators() {
+    run_fixture("12_integer_formatting_with_digit_separators");
+}
+
+#[test]
+fn fixture_13_currency_formatting_usd() {
+    run_fixture("13_currency_formatting_usd");
+}
+
+#[test]
+fn fixture_14_percent_formatting_from_proportions() {
+    run_fixture("14_percent_formatting_from_proportions");
+}
+
+#[test]
+fn fixture_15_scientific_notation() {
+    run_fixture("15_scientific_notation");
+}
+
+#[test]
+fn fixture_16_date_formatting() {
+    run_fixture("16_date_formatting");
+}
+
+#[test]
+fn fixture_17_date_time_datetime_in_one_table() {
+    run_fixture("17_date_time_datetime_in_one_table");
+}
+
+#[test]
+fn fixture_21_per_column_locale_french_dates() {
+    run_fixture("21_per_column_locale_french_dates");
+}
+
 /// Render phase-1 fixtures to a viewable HTML page at
 /// `target/tabulate_demo.html`. Ignored by default; run with
 /// `cargo test --test tabulate_fixtures emit_demo -- --include-ignored --nocapture`.
@@ -253,4 +298,27 @@ fn render_matches_expected() {
         let _ = ggsql::tabulate::test_normalize::normalize_html(&expected);
         eprintln!("TODO: render {}", f.file_name().unwrap().to_string_lossy());
     }
+}
+
+/// Dump normalized got/want for a single fixture to `/tmp/<name>_got.html`
+/// and `/tmp/<name>_want.html` for ad-hoc diffing. Run with
+/// `FIXTURE=14_... cargo test --test tabulate_fixtures -- --include-ignored dump_fixture --nocapture`.
+#[test]
+#[ignore = "diagnostic dump only"]
+fn dump_fixture() {
+    let name = std::env::var("FIXTURE").expect("set FIXTURE=<fixture-dir>");
+    let dir = fixtures_root().join(&name);
+    let query = fs::read_to_string(dir.join("query.ggsql")).unwrap();
+    let ir = ggsql::tabulate::execute::execute(&query, &dir.join("data.parquet")).unwrap();
+    let rendered = ggsql::tabulate::html::render(&ir);
+    let got = ggsql::tabulate::test_normalize::normalize_html(&rendered);
+    let want = ggsql::tabulate::test_normalize::normalize_html(
+        &fs::read_to_string(dir.join("expected.html")).unwrap(),
+    );
+    let got_path = format!("/tmp/{}_got.html", name);
+    let want_path = format!("/tmp/{}_want.html", name);
+    fs::write(&got_path, &got).unwrap();
+    fs::write(&want_path, &want).unwrap();
+    println!("wrote {} ({} bytes)", got_path, got.len());
+    println!("wrote {} ({} bytes)", want_path, want.len());
 }

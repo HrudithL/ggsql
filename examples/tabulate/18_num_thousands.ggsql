@@ -1,0 +1,12 @@
+-- Integer formatting with thousands separators: `,d` (or `'d`) inserts
+-- the locale-appropriate group separator. Use `d` (no flag) for plain
+-- integers without separators.
+SELECT
+  'Acme'             AS company, 1200000 AS revenue, 1825 AS employees UNION ALL SELECT
+  'Globex',                       980000,             1212               UNION ALL SELECT
+  'Initech',                      540500,              704               UNION ALL SELECT
+  'Umbrella',                   2100000,             2430                UNION ALL SELECT
+  'Stark Industries',           4800500,             5512
+TABULATE company, revenue, employees
+FORMAT revenue, employees
+  RENAMING * => '{:num ,d}'

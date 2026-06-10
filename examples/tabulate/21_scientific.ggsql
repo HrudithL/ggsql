@@ -1,0 +1,11 @@
+-- Scientific notation: `{:num .Ne}` renders the mantissa with N decimals
+-- and emits an HTML `<sup>` exponent. The Unicode minus (U+2212) is used
+-- for negative exponents to match gt's typography.
+SELECT
+  0.000001     AS small, 1234567000.0    AS large UNION ALL SELECT
+  0.00000345,            8765432.0                UNION ALL SELECT
+  0.000000089,           543219876543.0           UNION ALL SELECT
+  4.2,                   12.0
+TABULATE small, large
+FORMAT small, large
+  RENAMING * => '{:num .2e}'

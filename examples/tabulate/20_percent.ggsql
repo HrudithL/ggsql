@@ -1,0 +1,22 @@
+-- Percent formatting from proportions: a trailing `%` in the suffix
+-- multiplies the value by 100 before rendering and appends the symbol.
+-- Use `%%` to suppress the scaling and emit a literal `%`.
+SELECT
+   1 AS month, 9234 AS pizzas_sold, 0.0824 AS pct_of_annual UNION ALL SELECT
+   2,          8543,                0.0762                  UNION ALL SELECT
+   3,          9612,                0.0857                  UNION ALL SELECT
+   4,          9412,                0.0839                  UNION ALL SELECT
+   5,          9756,                0.0870                  UNION ALL SELECT
+   6,          9234,                0.0823                  UNION ALL SELECT
+   7,         10123,                0.0902                  UNION ALL SELECT
+   8,          9854,                0.0879                  UNION ALL SELECT
+   9,          9145,                0.0816                  UNION ALL SELECT
+  10,          9534,                0.0850                  UNION ALL SELECT
+  11,          9678,                0.0863                  UNION ALL SELECT
+  12,          7034,                0.0627
+TABULATE month, pizzas_sold, pct_of_annual
+FORMAT STUB month
+FORMAT pizzas_sold
+  RENAMING * => '{:num ,d}'
+FORMAT pct_of_annual
+  RENAMING * => '{:num .1f}%'
