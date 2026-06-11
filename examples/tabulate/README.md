@@ -5,9 +5,10 @@ so far — phase 1 (column selection / reordering / hide / `*`), phase 2
 (`FORMAT STUB`, `LABEL title/subtitle/caption`, per-column header relabels,
 and basic `{:num ...}` formatters), phase 3 (`FORMAT SPAN <cols> AS
 <id>` with nesting + `LABEL` through the spanner namespace), phase 4
-(`FORMAT <col> SETTING width / align`), and phase 5 (the full
+(`FORMAT <col> SETTING width / align`), phase 5 (the full
 `{:num <printf>}` and `{:time <strftime>}` formatter mini-language plus
-per-column `SETTING locale => '...'`).
+per-column `SETTING locale => '...'`), and phase 6 (`RENAMING null|0|'literal'
+=> '<text>'` direct value substitution).
 
 ## Run all examples
 
@@ -66,3 +67,6 @@ a browser:
 | [`22_dates.ggsql`](22_dates.ggsql) | `{:time %B %-d, %Y}` — date formatting with strftime directives |
 | [`23_datetime.ggsql`](23_datetime.ggsql) | Mixed date / time / datetime columns with `{:time ...}` |
 | [`24_french_locale.ggsql`](24_french_locale.ggsql) | `SETTING locale => 'fr'` for French month and weekday names |
+| [`25_replace_missing.ggsql`](25_replace_missing.ggsql) | `RENAMING null => '<text>'` — substitute missing values (`---` becomes em-dash) |
+| [`26_replace_zero.ggsql`](26_replace_zero.ggsql) | `RENAMING 0 => '<text>'` — substitute zero cells, composed with `* => '{:num ,d}'` |
+| [`27_direct_value_mapping.ggsql`](27_direct_value_mapping.ggsql) | `RENAMING '<value>' => '<text>'` — exact-value lookup table |

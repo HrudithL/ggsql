@@ -400,13 +400,20 @@ fn build_table_ir(
         }
     }
 
-    // Collect per-column format-override RHS strings and locales from
-    // `FORMAT … RENAMING * => '...'` and `SETTING locale => '...'`. Only
-    // the wildcard LHS is consumed here; richer renamings land in phase 6.
+    // Collect per-column format-override RHS strings, locales, and direct
+    // value substitutions from `FORMAT … SETTING locale => '...'` and
+    // `RENAMING <lhs> => '<rhs>'`. The wildcard LHS feeds the cell
+    // formatter; `null`, `0`, numeric, and string literals populate
+    // dedicated substitution maps consulted before the formatter (spec
+    // precedence: literal > null > 0 > `*`).
     use crate::tabulate::ast::RenamingLhs;
     use crate::tabulate::format::{build_format, CellFmt};
     let mut format_overrides: HashMap<String, String> = HashMap::new();
     let mut locale_overrides: HashMap<String, String> = HashMap::new();
+    let mut null_subst: HashMap<String, String> = HashMap::new();
+    let mut zero_subst: HashMap<String, String> = HashMap::new();
+    let mut numeric_substs: HashMap<String, Vec<(f64, String)>> = HashMap::new();
+    let mut literal_substs: HashMap<String, Vec<(String, String)>> = HashMap::new();
     for fc in &tab_stmt.format_clauses {
         if fc.mode != FormatMode::None {
             continue;
@@ -421,10 +428,43 @@ fn build_table_ir(
             }
         }
         for r in &fc.renamings {
-            if matches!(r.lhs, RenamingLhs::Wildcard) {
-                for col in &fc.columns {
-                    format_overrides.insert(col.to_ascii_lowercase(), r.rhs.clone());
+            match &r.lhs {
+                RenamingLhs::Wildcard => {
+                    for col in &fc.columns {
+                        format_overrides.insert(col.to_ascii_lowercase(), r.rhs.clone());
+                    }
                 }
+                RenamingLhs::Null => {
+                    let v = smart_text(&r.rhs);
+                    for col in &fc.columns {
+                        null_subst.insert(col.to_ascii_lowercase(), v.clone());
+                    }
+                }
+                RenamingLhs::Zero => {
+                    let v = smart_text(&r.rhs);
+                    for col in &fc.columns {
+                        zero_subst.insert(col.to_ascii_lowercase(), v.clone());
+                    }
+                }
+                RenamingLhs::Number(n) => {
+                    let v = smart_text(&r.rhs);
+                    for col in &fc.columns {
+                        numeric_substs
+                            .entry(col.to_ascii_lowercase())
+                            .or_default()
+                            .push((*n, v.clone()));
+                    }
+                }
+                RenamingLhs::Literal(lit) => {
+                    let v = smart_text(&r.rhs);
+                    for col in &fc.columns {
+                        literal_substs
+                            .entry(col.to_ascii_lowercase())
+                            .or_default()
+                            .push((lit.clone(), v.clone()));
+                    }
+                }
+                RenamingLhs::Identifier(_) => {}
             }
         }
     }
@@ -500,6 +540,40 @@ fn build_table_ir(
                         return "NA".to_string();
                     }
                     let col = combined.column(idx);
+                    let col_lower = col_name.to_ascii_lowercase();
+
+                    // Precedence: literal > null > 0 > * / auto.
+                    if !col.is_null(row_idx) {
+                        if let Some(subs) = literal_substs.get(&col_lower) {
+                            if let Some(sa) = col.as_any().downcast_ref::<StringArray>() {
+                                let val = sa.value(row_idx);
+                                if let Some((_, sub)) = subs.iter().find(|(k, _)| k == val) {
+                                    return sub.clone();
+                                }
+                            }
+                        }
+                        if let Some(subs) = numeric_substs.get(&col_lower) {
+                            if let Some(v) = numeric_to_f64(col, row_idx) {
+                                if let Some((_, sub)) = subs.iter().find(|(k, _)| {
+                                    (*k - v).abs() <= f64::EPSILON * v.abs().max(1.0)
+                                }) {
+                                    return sub.clone();
+                                }
+                            }
+                        }
+                    }
+                    if col.is_null(row_idx) {
+                        if let Some(s) = null_subst.get(&col_lower) {
+                            return s.clone();
+                        }
+                    } else if let Some(s) = zero_subst.get(&col_lower) {
+                        if let Some(v) = numeric_to_f64(col, row_idx) {
+                            if v == 0.0 {
+                                return s.clone();
+                            }
+                        }
+                    }
+
                     match formatters.get(*col_name) {
                         Some(ColFmt::Num(f)) => {
                             if col.is_null(row_idx) {
@@ -970,3 +1044,14 @@ fn numeric_to_f64(col: &ArrayRef, row: usize) -> Option<f64> {
 
 // `{:num <printf>}` and `{:time <strftime>}` formatters live in
 // `super::format`; this module dispatches through `format::build_format`.
+
+/// gt's `sub_missing()` (and friends) run their replacement text through
+/// the same processor used for markdown labels, which collapses `---` to
+/// an em-dash, `--` to an en-dash, and `...` to a horizontal ellipsis. We
+/// apply the same conversion to the RHS of `RENAMING null|0|'literal' =>
+/// '...'` so substitution output matches gt byte-for-byte.
+fn smart_text(s: &str) -> String {
+    s.replace("---", "\u{2014}")
+        .replace("--", "\u{2013}")
+        .replace("...", "\u{2026}")
+}

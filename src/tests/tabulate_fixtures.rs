@@ -244,6 +244,26 @@ fn fixture_21_per_column_locale_french_dates() {
     run_fixture("21_per_column_locale_french_dates");
 }
 
+// ============================================================================
+// Phase 6 fixture tests: FORMAT … RENAMING null|0|'literal' => '<text>'
+// (direct value substitution, precedence literal > null > 0 > `*`).
+// ============================================================================
+
+#[test]
+fn fixture_18_replace_missing_values() {
+    run_fixture("18_replace_missing_values");
+}
+
+#[test]
+fn fixture_19_replace_zero_values() {
+    run_fixture("19_replace_zero_values");
+}
+
+#[test]
+fn fixture_20_direct_value_mapping_text_case_match() {
+    run_fixture("20_direct_value_mapping_text_case_match");
+}
+
 /// Render phase-1 fixtures to a viewable HTML page at
 /// `target/tabulate_demo.html`. Ignored by default; run with
 /// `cargo test --test tabulate_fixtures emit_demo -- --include-ignored --nocapture`.
