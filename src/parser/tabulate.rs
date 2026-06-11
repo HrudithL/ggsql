@@ -2,8 +2,8 @@
 
 use crate::parser::SourceTree;
 use crate::tabulate::ast::{
-    FormatClause, FormatMode, FormatRenaming, FormatSetting, LabelClause, RenamingLhs,
-    SettingValue, TabulateStmt,
+    FormatClause, FormatMode, FormatRenaming, FormatSetting, LabelClause, RenamingLhs, ScaleClause,
+    ScalePalette, SettingValue, TabulateStmt,
 };
 use crate::{GgsqlError, Result};
 
@@ -64,11 +64,19 @@ pub fn parse_tabulate(source: &SourceTree<'_>) -> Result<TabulateStmt> {
         .map(|n| parse_label_clause(source, &n))
         .transpose()?;
 
+    // --- SCALE clauses ---
+    let scale_nodes = source.find_nodes(&stmt, "(tab_scale_clause) @sc");
+    let scale_clauses: Vec<ScaleClause> = scale_nodes
+        .into_iter()
+        .map(|n| parse_scale_clause(source, &n))
+        .collect::<Result<Vec<_>>>()?;
+
     Ok(TabulateStmt {
         columns,
         from_source,
         format_clauses,
         label,
+        scale_clauses,
     })
 }
 
@@ -346,4 +354,99 @@ fn parse_label_clause(
         }
     }
     Ok(out)
+}
+
+fn parse_scale_clause(
+    source: &SourceTree<'_>,
+    node: &tree_sitter::Node<'_>,
+) -> Result<ScaleClause> {
+    // aesthetic: field `aesthetic` (identifier directly under the clause)
+    let aesthetic = node
+        .child_by_field_name("aesthetic")
+        .map(|n| source.get_text(&n))
+        .ok_or_else(|| GgsqlError::ParseError("SCALE missing aesthetic".to_string()))?;
+
+    // domain from `(tab_scale_from)`: two numbers
+    let domain = source
+        .find_nodes(node, "(tab_scale_from) @f")
+        .into_iter()
+        .next()
+        .and_then(|f| {
+            let nums = source.find_nodes(&f, "(number) @n");
+            if nums.len() >= 2 {
+                let a: f64 = source.get_text(&nums[0]).parse().ok()?;
+                let b: f64 = source.get_text(&nums[1]).parse().ok()?;
+                Some((a, b))
+            } else {
+                None
+            }
+        });
+
+    // palette from `(tab_scale_to)`: either `palette: identifier` (named)
+    // or one-or-more `(string)` children (explicit stops).
+    let palette = source
+        .find_nodes(node, "(tab_scale_to) @t")
+        .into_iter()
+        .next()
+        .map(|to_node| {
+            if let Some(p) = to_node.child_by_field_name("palette") {
+                ScalePalette::Named(source.get_text(&p))
+            } else {
+                let stops: Vec<String> = source
+                    .find_nodes(&to_node, "(string) @s")
+                    .into_iter()
+                    .map(|n| unquote_string(&source.get_text(&n)))
+                    .collect();
+                ScalePalette::Stops(stops)
+            }
+        })
+        .ok_or_else(|| GgsqlError::ParseError("SCALE missing TO clause".to_string()))?;
+
+    // optional VIA <id>
+    let transform = source
+        .find_nodes(node, "(tab_scale_via) @v")
+        .into_iter()
+        .next()
+        .and_then(|v| v.child_by_field_name("transform"))
+        .map(|n| source.get_text(&n));
+
+    // SETTING target => <col>|(col, col, ...)  — collect all identifiers
+    // that follow `=>` inside the setting block.
+    let target_cols = source
+        .find_nodes(node, "(tab_scale_setting) @s")
+        .into_iter()
+        .next()
+        .map(|s_node| {
+            let key_node = s_node.child_by_field_name("key");
+            let mut ids = Vec::new();
+            let mut cursor = s_node.walk();
+            let mut after_arrow = false;
+            for child in s_node.children(&mut cursor) {
+                if child.kind() == "=>" {
+                    after_arrow = true;
+                    continue;
+                }
+                if !after_arrow {
+                    continue;
+                }
+                if child.kind() == "identifier" {
+                    if let Some(k) = &key_node {
+                        if child.id() == k.id() {
+                            continue;
+                        }
+                    }
+                    ids.push(source.get_text(&child));
+                }
+            }
+            ids
+        })
+        .unwrap_or_default();
+
+    Ok(ScaleClause {
+        aesthetic,
+        domain,
+        palette,
+        transform,
+        target_cols,
+    })
 }

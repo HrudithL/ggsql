@@ -10,6 +10,7 @@ pub mod ast;
 pub mod execute;
 pub mod format;
 pub mod html;
+pub mod scale;
 pub mod test_normalize;
 
 /// Default CSS, vendored from gt via `scripts/extract_gt_css.R`. Emitted

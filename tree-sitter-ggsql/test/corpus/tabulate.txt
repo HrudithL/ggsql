@@ -98,3 +98,79 @@ TABULATE mfr, model
         (bare_identifier))
       (identifier
         (bare_identifier)))))
+
+================================================================================
+TABULATE with SCALE background named palette
+================================================================================
+
+TABULATE mfr, model, hp FROM gtcars
+SCALE background TO viridis
+  SETTING target => hp
+
+--------------------------------------------------------------------------------
+
+(query
+  (tabulate_statement
+    (tabulate_keyword)
+    (tab_col_list
+      (identifier
+        (bare_identifier))
+      (identifier
+        (bare_identifier))
+      (identifier
+        (bare_identifier)))
+    (tab_from_clause
+      source: (identifier
+        (bare_identifier)))
+    (tab_clause
+      (tab_scale_clause
+        aesthetic: (identifier
+          (bare_identifier))
+        (tab_scale_to
+          palette: (identifier
+            (bare_identifier)))
+        (tab_scale_setting
+          key: (identifier
+            (bare_identifier))
+          (identifier
+            (bare_identifier)))))))
+
+================================================================================
+TABULATE with SCALE background explicit colors and VIA log10
+================================================================================
+
+TABULATE country, gdp FROM world
+SCALE background FROM (0, 100000) TO ('white', 'darkgreen') VIA log10
+  SETTING target => (gdp)
+
+--------------------------------------------------------------------------------
+
+(query
+  (tabulate_statement
+    (tabulate_keyword)
+    (tab_col_list
+      (identifier
+        (bare_identifier))
+      (identifier
+        (bare_identifier)))
+    (tab_from_clause
+      source: (identifier
+        (bare_identifier)))
+    (tab_clause
+      (tab_scale_clause
+        aesthetic: (identifier
+          (bare_identifier))
+        (tab_scale_from
+          (number)
+          (number))
+        (tab_scale_to
+          (string)
+          (string))
+        (tab_scale_via
+          transform: (identifier
+            (bare_identifier)))
+        (tab_scale_setting
+          key: (identifier
+            (bare_identifier))
+          (identifier
+            (bare_identifier)))))))

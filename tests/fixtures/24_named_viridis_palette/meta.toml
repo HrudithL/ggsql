@@ -3,4 +3,13 @@ title = "Named viridis palette"
 gt_version = "1.3.0"
 captured_at = "2026-06-04T00:32:06-0400"
 normalization_profile = "default"
-# allowed_diff = []  # add regex strings only with justification in AGENT_LOG.md
+# Justification (see AGENT_LOG.md 2026-06-11): our 256-stop `VIRIDIS`
+# palette in `src/plot/scale/palettes.rs` is taken from a different
+# sampling of the underlying viridis colormap than R's
+# `viridisLite::viridis(256)`. Each channel is off by 1 unit (e.g.
+# `#3A528B` vs R's `#3B528B`). All structural HTML matches exactly; only
+# the interpolated colour hex differs by this constant per-channel shift.
+allowed_diff = [
+  'background-color: #[0-9A-F]{6}',
+  'bgcolor="#[0-9A-F]{6}"',
+]

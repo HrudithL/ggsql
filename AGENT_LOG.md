@@ -185,3 +185,51 @@ the deviation or `allowed_diff` justification.
   `27_direct_value_mapping`; README updated;
   `examples/tabulate/out/index.html` regenerated.
 - No `allowed_diff` entries added.
+
+## 2026-06-11 — phase 7 complete
+
+- Fixtures 22 (`SCALE background FROM (lo,hi) TO RdYlGn` over four
+  columns), 23 (auto-inferred domain with two-stop explicit-colour
+  gradient), 24 (`SCALE background TO viridis`), and 25 (`SCALE … VIA
+  log10` with explicit domain anchored at zero) pass. 26/26 TABULATE
+  fixture tests green.
+- New `src/tabulate/scale.rs` implements gt's `data_color()` semantics:
+  Lab(D65) interpolation via the `palette` crate's `Lab::mix()`, named
+  palettes via `crate::plot::scale::palettes::get_color_palette`, explicit
+  hex / CSS colour stops via `csscolorparser`, NA → `#808080` for
+  out-of-domain / non-finite values, and `ideal_fg` foreground colour
+  picked by **YIQ brightness threshold 156** (not WCAG contrast — gt uses
+  YIQ). For `VIA log10`, `lo_t = 0` when `domain.0 <= 0` to match gt's
+  `scales::col_numeric(transform = "log10", domain = c(0, hi))`, which
+  otherwise produces `-Inf` and a NA-only column.
+- `build_float_formatter` (`src/tabulate/execute.rs`) now emits scientific
+  notation `%.3e` for all-integer double columns when `max_abs >= 1e8`.
+  Fixture 25's `population` column (1.4e9) needed this; gt switches to
+  scientific at that threshold for default float formatting.
+- AST: `TabulateStmt.scale_clauses: Vec<ScaleClause>`,
+  `ScalePalette::{Stops(Vec<String>), Named(String)}`. Parser:
+  `parse_scale_clause` in `src/parser/tabulate.rs` walks
+  `tab_scale_from/to/via/setting`. Grammar: `tab_scale_clause` added to
+  `tab_clause` choice (`tree-sitter-ggsql/grammar.js`); 105 corpus tests
+  pass.
+- `TableIr.cell_bg: Vec<Vec<Option<String>>>` carries per-cell hex
+  backgrounds. `html.rs` appends `background-color: <hex>; color:
+  <ideal_fg>;` plus `bgcolor="<hex>"` to each non-stub cell that has a
+  background. Last scale clause wins (gt's last-writer semantics).
+- One `allowed_diff` entry: fixture 24 (`24_named_viridis_palette`). Our
+  bundled `VIRIDIS` 256-stop palette in `src/plot/scale/palettes.rs`
+  differs from R's `viridisLite::viridis(256)` by 1 unit per channel
+  (e.g. `#3A528B` vs R's `#3B528B`). The mask
+  `'background-color: #[0-9A-F]{6}'` + `'bgcolor="#[0-9A-F]{6}"'` lets
+  the structural HTML diff strictly while ignoring the constant
+  per-channel hex shift. Documented inline in `meta.toml`.
+- Fixed two bugs in `read_allowed_diff` (`src/tests/tabulate_fixtures.rs`)
+  uncovered while writing fixture 24's mask: (1) `text.split('#')` was
+  stripping `#` inside regex patterns as if it were a TOML comment, and
+  (2) a `]` inside a regex character class (e.g. `[0-9A-F]`) was
+  prematurely ending the array body. Replaced with a line-by-line state
+  machine plus quote-aware `strip_line_comment` and
+  `has_close_bracket_outside_quotes` helpers.
+- New examples `28_scale_named_palette`, `29_scale_explicit_colors`,
+  `30_scale_explicit_domain`, `31_scale_log_transform`; README updated;
+  `examples/tabulate/out/index.html` regenerated.

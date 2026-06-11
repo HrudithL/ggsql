@@ -14,6 +14,34 @@ pub struct TabulateStmt {
     pub format_clauses: Vec<FormatClause>,
     /// Single LABEL clause (collapsed across the at-most-one allowed clause).
     pub label: Option<LabelClause>,
+    /// Zero or more SCALE clauses.
+    pub scale_clauses: Vec<ScaleClause>,
+}
+
+/// A `SCALE <aesthetic> [FROM (min, max)] TO <palette>|(c1, c2, ...) [VIA <id>]
+///   SETTING target => <col>|(col, ...)` clause.
+#[derive(Debug, Clone)]
+pub struct ScaleClause {
+    /// Currently always `background`.
+    pub aesthetic: String,
+    /// Explicit numeric domain (min, max) from `FROM (min, max)`. When
+    /// `None`, the domain is inferred from the target columns' data.
+    pub domain: Option<(f64, f64)>,
+    /// Output colour spec from `TO ...`.
+    pub palette: ScalePalette,
+    /// Optional transform from `VIA <id>` (only `log10` is recognised).
+    pub transform: Option<String>,
+    /// Target columns the scale applies to (from `SETTING target => ...`).
+    pub target_cols: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ScalePalette {
+    /// Explicit list of colour stops as parsed string literals (e.g.
+    /// `('white', 'darkgreen')` or `('#f7fbff', '#08306b')`).
+    Stops(Vec<String>),
+    /// Named built-in palette (`viridis`, `RdYlGn`, ...).
+    Named(String),
 }
 
 /// A `LABEL key => '...', ...` clause.

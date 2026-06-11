@@ -7,8 +7,10 @@ and basic `{:num ...}` formatters), phase 3 (`FORMAT SPAN <cols> AS
 <id>` with nesting + `LABEL` through the spanner namespace), phase 4
 (`FORMAT <col> SETTING width / align`), phase 5 (the full
 `{:num <printf>}` and `{:time <strftime>}` formatter mini-language plus
-per-column `SETTING locale => '...'`), and phase 6 (`RENAMING null|0|'literal'
-=> '<text>'` direct value substitution).
+per-column `SETTING locale => '...'`), phase 6 (`RENAMING null|0|'literal'
+=> '<text>'` direct value substitution), and phase 7 (`SCALE background`
+continuous colour scales — named palettes, explicit colour stops,
+explicit `FROM (lo, hi)` domain, and `VIA log10` transform).
 
 ## Run all examples
 
@@ -70,3 +72,7 @@ a browser:
 | [`25_replace_missing.ggsql`](25_replace_missing.ggsql) | `RENAMING null => '<text>'` — substitute missing values (`---` becomes em-dash) |
 | [`26_replace_zero.ggsql`](26_replace_zero.ggsql) | `RENAMING 0 => '<text>'` — substitute zero cells, composed with `* => '{:num ,d}'` |
 | [`27_direct_value_mapping.ggsql`](27_direct_value_mapping.ggsql) | `RENAMING '<value>' => '<text>'` — exact-value lookup table |
+| [`28_scale_named_palette.ggsql`](28_scale_named_palette.ggsql) | `SCALE background TO viridis` — colour cells along a named gt palette |
+| [`29_scale_explicit_colors.ggsql`](29_scale_explicit_colors.ggsql) | `SCALE background TO ('<color>', '<color>')` — two-stop gradient in Lab space |
+| [`30_scale_explicit_domain.ggsql`](30_scale_explicit_domain.ggsql) | `SCALE background FROM (lo, hi) TO RdYlGn SETTING target => (col, col, …)` — fixed domain across several columns |
+| [`31_scale_log_transform.ggsql`](31_scale_log_transform.ggsql) | `SCALE background … VIA log10` — log-warped colour mapping for wide-range data |

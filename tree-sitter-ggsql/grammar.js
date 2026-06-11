@@ -606,7 +606,52 @@ module.exports = grammar({
     ),
 
     // Sub-clauses allowed inside a TABULATE statement
-    tab_clause: $ => choice($.format_clause, $.label_clause),
+    tab_clause: $ => choice($.format_clause, $.label_clause, $.tab_scale_clause),
+
+    // SCALE <aesthetic> [FROM (min, max)] TO <palette>|(c1, c2, ...) [VIA <id>]
+    //   SETTING target => <id>|(id, id, ...)
+    //
+    // Currently the only supported aesthetic is `background`. The TO clause
+    // may name a built-in palette (bareword) or list explicit colour stops
+    // as a parenthesised string array.
+    tab_scale_clause: $ => prec.right(seq(
+      caseInsensitive('SCALE'),
+      field('aesthetic', $.identifier),
+      optional($.tab_scale_from),
+      $.tab_scale_to,
+      optional($.tab_scale_via),
+      optional($.tab_scale_setting)
+    )),
+
+    tab_scale_from: $ => seq(
+      caseInsensitive('FROM'),
+      '(',
+      $.number, ',', $.number,
+      ')'
+    ),
+
+    tab_scale_to: $ => seq(
+      caseInsensitive('TO'),
+      choice(
+        seq('(', $.string, repeat(seq(',', $.string)), ')'),
+        field('palette', $.identifier)
+      )
+    ),
+
+    tab_scale_via: $ => seq(
+      caseInsensitive('VIA'),
+      field('transform', $.identifier)
+    ),
+
+    tab_scale_setting: $ => seq(
+      caseInsensitive('SETTING'),
+      field('key', $.identifier),
+      '=>',
+      choice(
+        seq('(', $.identifier, repeat(seq(',', $.identifier)), ')'),
+        $.identifier
+      )
+    ),
 
     // FORMAT [SPAN | STUB] col [, col ...] [AS span_id]
     //   [SETTING key => value, ...]

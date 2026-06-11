@@ -276,7 +276,14 @@ pub fn render(table: &TableIr) -> String {
         TBODY_STYLE
     ));
     for (row_idx, row) in table.rows.iter().enumerate() {
-        out.push_str(&render_tr(row, &table.columns, table.stub_col, row_idx));
+        let bg_row = table.cell_bg.get(row_idx).map(|v| v.as_slice());
+        out.push_str(&render_tr(
+            row,
+            &table.columns,
+            table.stub_col,
+            row_idx,
+            bg_row,
+        ));
     }
     out.push_str("  </tbody>\n");
 
@@ -529,6 +536,7 @@ fn render_tr(
     columns: &[ColMeta],
     stub_col: Option<usize>,
     row_idx: usize,
+    bg_row: Option<&[Option<String>]>,
 ) -> String {
     let mut out = String::new();
     out.push_str(&format!("    <tr style=\"{}\">", TR_STYLE));
@@ -536,6 +544,7 @@ fn render_tr(
     // first token of every sibling cell's `headers` attribute).
     let stub_id = stub_col.map(|_| format!("stub_1_{}", row_idx + 1));
     for (i, (value, col)) in row.iter().zip(columns.iter()).enumerate() {
+        let bg = bg_row.and_then(|r| r.get(i)).and_then(|o| o.as_deref());
         let cell = if Some(i) == stub_col {
             // Stub <th> in tbody. Alignment / numeric styling tracks the
             // column's resolved alignment (numeric stubs render right).
@@ -571,6 +580,16 @@ fn render_tr(
             if align.tabular_nums() {
                 style.push_str(" font-variant-numeric: tabular-nums;");
             }
+            let (style_with_bg, bgcolor_attr) = match bg {
+                Some(hex) => {
+                    let fg = crate::tabulate::scale::ideal_fg(hex);
+                    (
+                        format!("{} background-color: {}; color: {};", style, hex, fg),
+                        format!(" bgcolor=\"{}\"", hex),
+                    )
+                }
+                None => (style, String::new()),
+            };
             let headers = match &stub_id {
                 Some(sid) => format!("{} {}", sid, col.name),
                 None => col.name.clone(),
@@ -581,9 +600,9 @@ fn render_tr(
                 html_escape(value)
             };
             format!(
-                "<td headers=\"{}\" class=\"gt_row {}\" style=\"{}\" \
+                "<td headers=\"{}\" class=\"gt_row {}\" style=\"{}\"{} \
                  valign=\"middle\" align=\"{}\">{}</td>",
-                headers, gt_class, style, align_str, cell_text
+                headers, gt_class, style_with_bg, bgcolor_attr, align_str, cell_text
             )
         };
         if i == 0 {
