@@ -16,6 +16,27 @@ pub struct TabulateStmt {
     pub label: Option<LabelClause>,
     /// Zero or more SCALE clauses.
     pub scale_clauses: Vec<ScaleClause>,
+    /// Zero or more HIGHLIGHT clauses.
+    pub highlight_clauses: Vec<HighlightClause>,
+}
+
+/// A `HIGHLIGHT <col>[, <col>...] FILTER <pred> SETTING <k> => <v>, ...` clause.
+#[derive(Debug, Clone)]
+pub struct HighlightClause {
+    /// Columns the highlight applies to.
+    pub columns: Vec<String>,
+    /// Raw SQL predicate from the `FILTER` clause (sent to the SQL
+    /// backend verbatim as a boolean projection).
+    pub filter: String,
+    /// `SETTING <key> => <value>` pairs (e.g. `face => 'bold'`,
+    /// `color => 'red'`, `background => '#90EE90'`).
+    pub settings: Vec<HighlightSetting>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HighlightSetting {
+    pub key: String,
+    pub value: SettingValue,
 }
 
 /// A `SCALE <aesthetic> [FROM (min, max)] TO <palette>|(c1, c2, ...) [VIA <id>]

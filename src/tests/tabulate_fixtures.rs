@@ -349,6 +349,27 @@ fn fixture_25_log_scaled_color_mapping() {
     run_fixture("25_log_scaled_color_mapping");
 }
 
+// ============================================================================
+// Phase 8 fixture tests: HIGHLIGHT … FILTER … SETTING … (cell-level styling
+// driven by a SQL predicate). Multiple HIGHLIGHTs may coexist; later
+// clauses win on conflict.
+// ============================================================================
+
+#[test]
+fn fixture_26_conditional_cell_highlight_single_column() {
+    run_fixture("26_conditional_cell_highlight_single_column");
+}
+
+#[test]
+fn fixture_27_multi_column_conditional_highlight() {
+    run_fixture("27_multi_column_conditional_highlight");
+}
+
+#[test]
+fn fixture_28_up_down_day_stock_highlight_two_highlights() {
+    run_fixture("28_up_down_day_stock_highlight_two_highlights");
+}
+
 /// Render phase-1 fixtures to a viewable HTML page at
 /// `target/tabulate_demo.html`. Ignored by default; run with
 /// `cargo test --test tabulate_fixtures emit_demo -- --include-ignored --nocapture`.

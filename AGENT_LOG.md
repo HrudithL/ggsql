@@ -233,3 +233,39 @@ the deviation or `allowed_diff` justification.
 - New examples `28_scale_named_palette`, `29_scale_explicit_colors`,
   `30_scale_explicit_domain`, `31_scale_log_transform`; README updated;
   `examples/tabulate/out/index.html` regenerated.
+
+## 2026-06-11 — phase 8 complete
+
+- Fixtures 26 (single-column conditional cell highlight), 27 (multi-column
+  conditional highlight), and 28 (two HIGHLIGHTs for up/down stock days)
+  pass under strict normalization.
+- Grammar: added `tab_highlight_clause` (with `tab_highlight_setting` /
+  `tab_highlight_pair`) to `tab_clause` alternation in
+  `tree-sitter-ggsql/grammar.js`; reused the existing `filter_clause`
+  rule so `WHERE`-style SQL predicates can be embedded inline. 105/105
+  tree-sitter corpus tests pass.
+- AST: `TabulateStmt` gained `highlight_clauses: Vec<HighlightClause>`;
+  each entry holds the target column list, the raw predicate source, and
+  the parsed SETTING key/value pairs.
+- Predicate evaluation strategy: instead of building a separate SQL
+  evaluator, `build_sql` wraps the user's SELECT in a subquery and
+  appends one boolean projection per HIGHLIGHT named `__hl_<N>__match`.
+  After execution, `build_cell_style` reads each `BooleanArray` column
+  and writes `CellStyle { background, color, face }` for every (row, col)
+  hit. The `__hl_*` columns are filtered out of `schema_names` so they
+  never appear in the rendered table.
+- HTML rendering: `render_tr` now takes an optional per-row
+  `&[CellStyle]`. The body-cell renderer merges scale background with
+  highlight background using gt's last-writer-wins semantics —
+  HIGHLIGHT background overrides SCALE background, but unlike SCALE we
+  do NOT synthesize a foreground colour from YIQ when the bg comes
+  solely from HIGHLIGHT (gt only does this for SCALE-style continuous
+  fills). `face` maps to `font-weight: bold` for `'bold'`, to
+  `font-style: italic|oblique` for those values, and to
+  `font-weight: <value>` otherwise. `color` maps to `color: <hex>;`.
+- New examples 32-34 (`32_highlight_failing_scores`,
+  `33_highlight_region_row`, `34_highlight_up_down_days`) demonstrate
+  single-column conditional emphasis, multi-column row-style highlights,
+  and composing two HIGHLIGHTs with currency formatting; README updated;
+  `examples/tabulate/out/index.html` regenerated.
+- No `allowed_diff` entries added for this phase.
