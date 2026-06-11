@@ -1116,7 +1116,11 @@ module.exports = grammar({
       )
     )),
 
-    string: $ => seq("'", repeat(choice(/[^'\\]/, /\\./, "''")), "'"),
+    // String literal — wrapped in `token(...)` so tree-sitter extras
+    // (whitespace and SQL `--` comments) do not get inserted inside the
+    // quotes. Without this, a literal like `'---'` parses as `'-` + a
+    // `--…` line comment + missing closing quote.
+    string: $ => token(seq("'", repeat(choice(/[^'\\]/, /\\./, "''")), "'")),
 
     boolean: $ => choice('true', 'false'),
 

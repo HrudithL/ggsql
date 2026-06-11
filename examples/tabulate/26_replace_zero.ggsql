@@ -1,0 +1,16 @@
+-- `RENAMING 0 => '<text>'` substitutes a fixed string for cells whose
+-- value is exactly zero (gt's `sub_zero`). Precedence: `0` wins over the
+-- wildcard `*` formatter, so non-zero values still pass through
+-- `{:num ,d}`.
+SELECT
+  'Widget A' AS product, CAST(150 AS INTEGER) AS in_stock, CAST(  0 AS INTEGER) AS on_order UNION ALL SELECT
+  'Widget B',            CAST(  0 AS INTEGER),             CAST(200 AS INTEGER)             UNION ALL SELECT
+  'Widget C',            CAST( 75 AS INTEGER),             CAST(  0 AS INTEGER)             UNION ALL SELECT
+  'Widget D',            CAST(  3 AS INTEGER),             CAST( 12 AS INTEGER)
+TABULATE product, in_stock, on_order
+FORMAT in_stock, on_order
+  RENAMING * => '{:num ,d}'
+FORMAT in_stock
+  RENAMING 0 => 'Out of stock'
+FORMAT on_order
+  RENAMING 0 => '-'

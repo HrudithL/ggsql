@@ -161,3 +161,27 @@ the deviation or `allowed_diff` justification.
   `21_scientific`, `22_dates`, `23_datetime`, `24_french_locale`); README
   updated; `examples/tabulate/out/index.html` regenerated.
 - No `allowed_diff` entries added.
+
+## 2026-06-10 — phase 6 complete
+
+- Fixtures 18 (`RENAMING null => '<text>'`), 19 (`RENAMING 0 => '<text>'`
+  composed with `* => '{:num ,d}'`), and 20 (`RENAMING '<value>' =>
+  '<text>'` exact match) pass under strict normalization. 22/22 TABULATE
+  fixture tests green.
+- `build_table_ir` now builds four substitution maps in addition to
+  `format_overrides`: `null_subst`, `zero_subst`, `numeric_substs`, and
+  `literal_substs`. Row rendering consults them in spec precedence order
+  (literal > null > 0 > `*`) before falling through to the cell formatter.
+- Substitution RHS strings pass through a new `smart_text()` helper that
+  collapses `---` → em-dash, `--` → en-dash, `...` → ellipsis. This
+  matches gt's `sub_missing()` text processing — needed for fixture 18
+  where `RENAMING null => '---'` renders as `—`.
+- Grammar fix in `tree-sitter-ggsql/grammar.js`: the `string` rule is now
+  wrapped in `token(...)` so tree-sitter extras (whitespace + SQL `--`
+  comments) are not inserted inside string literals. Without this, a
+  literal like `'---'` parsed as `'-` + `--<comment>` + missing closing
+  `'`. All 103 tree-sitter corpus tests still pass.
+- New examples `25_replace_missing`, `26_replace_zero`,
+  `27_direct_value_mapping`; README updated;
+  `examples/tabulate/out/index.html` regenerated.
+- No `allowed_diff` entries added.
