@@ -59,6 +59,12 @@ pub struct TableIr {
     pub columns: Vec<ColMeta>,
     /// Row data: one entry per row, values in same order as `columns`.
     pub rows: Vec<Vec<String>>,
+    /// Per-cell background colour from `SCALE background`. Same shape as
+    /// [`Self::rows`]. `None` for cells that no `SCALE` applies to. A
+    /// `Some(hex)` value is an uppercase 6-digit colour (`#RRGGBB`); the
+    /// HTML writer derives the contrasting foreground colour via
+    /// [`super::scale::ideal_fg`].
+    pub cell_bg: Vec<Vec<Option<String>>>,
     /// Table title (gt's `tab_header(title=)`).
     pub title: Option<String>,
     /// Table subtitle (gt's `tab_header(subtitle=)`).
@@ -621,9 +627,12 @@ fn build_table_ir(
 
     let header_forest = build_header_forest(tab_stmt, &columns, &label_map);
 
+    let cell_bg = build_cell_bg(tab_stmt, &columns, combined);
+
     Ok(TableIr {
         columns,
         rows,
+        cell_bg,
         title,
         subtitle,
         caption,
@@ -713,6 +722,76 @@ fn build_header_forest(
     }
 
     nodes
+}
+
+/// Compute the per-cell background-colour matrix from any `SCALE background`
+/// clauses in `tab_stmt`. Returns a matrix the same shape as `TableIr::rows`,
+/// where `None` means no scale applies to that cell and `Some(hex)` is the
+/// resolved uppercase 6-digit colour. If multiple scales target the same
+/// column the later clause wins (matching gt's last-writer-wins semantics).
+fn build_cell_bg(
+    tab_stmt: &TabulateStmt,
+    columns: &[ColMeta],
+    combined: &RecordBatch,
+) -> Vec<Vec<Option<String>>> {
+    use crate::tabulate::scale::{map_value, resolve_stops};
+    let nrows = combined.num_rows();
+    let ncols = columns.len();
+    let mut out: Vec<Vec<Option<String>>> = (0..nrows).map(|_| vec![None; ncols]).collect();
+
+    for sc in &tab_stmt.scale_clauses {
+        if !sc.aesthetic.eq_ignore_ascii_case("background") {
+            continue;
+        }
+        let stops = resolve_stops(&sc.palette);
+        if stops.is_empty() {
+            continue;
+        }
+        let transform = sc.transform.as_deref();
+
+        for target in &sc.target_cols {
+            let col_idx = match columns
+                .iter()
+                .position(|c| c.name.eq_ignore_ascii_case(target))
+            {
+                Some(i) => i,
+                None => continue,
+            };
+            let data_idx = match combined.schema().index_of(&columns[col_idx].name) {
+                Ok(i) => i,
+                Err(_) => continue,
+            };
+            let arr = combined.column(data_idx);
+
+            // Resolve the domain: explicit `FROM (min, max)` or inferred
+            // from the column's min/max (skipping nulls / non-finite).
+            let domain = if let Some(d) = sc.domain {
+                d
+            } else {
+                let mut lo = f64::INFINITY;
+                let mut hi = f64::NEG_INFINITY;
+                for r in 0..nrows {
+                    if let Some(v) = numeric_to_f64(arr, r) {
+                        if v.is_finite() {
+                            lo = lo.min(v);
+                            hi = hi.max(v);
+                        }
+                    }
+                }
+                if lo.is_finite() && hi.is_finite() {
+                    (lo, hi)
+                } else {
+                    continue;
+                }
+            };
+
+            for (row_idx, row_cells) in out.iter_mut().enumerate().take(nrows) {
+                let v = numeric_to_f64(arr, row_idx);
+                row_cells[col_idx] = Some(map_value(v, domain, &stops, transform));
+            }
+        }
+    }
+    out
 }
 
 // ============================================================================
@@ -913,7 +992,22 @@ fn build_float_formatter(values: &[Option<f64>]) -> Box<dyn Fn(Option<f64>) -> S
         .iter()
         .all(|v| (v - v.round()).abs() < 1e-9 * v.abs().max(1.0));
 
+    let max_abs = non_null.iter().map(|v| v.abs()).fold(0f64, f64::max);
+
     if all_integer {
+        // gt's R-side default rendering of a numeric vector falls back to
+        // `format()`, which picks scientific notation when the shortest
+        // representation of the largest value is shorter as `X.XXXe+YY`
+        // than as a fixed integer. That switch kicks in around `max_abs >=
+        // 1e8` (e.g. 1.412e+09 is 9 chars vs 1412000000 at 10), so we use
+        // that threshold for the whole column.
+        if max_abs >= 1e8 {
+            return Box::new(|v: Option<f64>| match v {
+                None => "NA".to_string(),
+                Some(x) if x.is_nan() => "NA".to_string(),
+                Some(x) => format_scientific_3dp(x),
+            });
+        }
         return Box::new(|v: Option<f64>| match v {
             None => "NA".to_string(),
             Some(x) if x.is_nan() => "NA".to_string(),
@@ -922,8 +1016,6 @@ fn build_float_formatter(values: &[Option<f64>]) -> Box<dyn Fn(Option<f64>) -> S
     }
 
     // Determine: scientific or fixed?
-    let max_abs = non_null.iter().map(|v| v.abs()).fold(0f64, f64::max);
-
     let fixed_width_of_max = format!("{:.3}", max_abs).len();
     let use_scientific = fixed_width_of_max > 9;
 

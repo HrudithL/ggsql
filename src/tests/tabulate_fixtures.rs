@@ -43,31 +43,90 @@ fn list_fixtures() -> Vec<PathBuf> {
 /// a regex pattern; matching substrings are masked to `<<ALLOWED_DIFF>>` on
 /// BOTH sides before comparison. Used only when a fixture's captured HTML
 /// contains a per-capture quirk that cannot reasonably be reproduced.
+///
+/// This is intentionally a hand-rolled mini-parser (not a real TOML parser)
+/// so that a bare `]` inside a regex pattern doesn't end the array, and so
+/// that `#` outside of a string literal still works as a TOML comment
+/// without eating `#` inside a regex.
 fn read_allowed_diff(meta_path: &Path) -> Vec<Regex> {
     let Ok(text) = fs::read_to_string(meta_path) else {
         return Vec::new();
     };
-    // Strip line comments so a leading `#` disables an entry.
-    let stripped: String = text
-        .lines()
-        .map(|l| l.split('#').next().unwrap_or(""))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let arr_re = Regex::new(r"(?s)allowed_diff\s*=\s*\[(.*?)\]").unwrap();
+    let mut out: Vec<Regex> = Vec::new();
+    let mut in_array = false;
     let item_re = Regex::new(r#"'([^']*)'|"([^"]*)""#).unwrap();
-    let Some(cap) = arr_re.captures(&stripped) else {
-        return Vec::new();
-    };
-    let body = &cap[1];
-    item_re
-        .captures_iter(body)
-        .filter_map(|c| {
-            c.get(1)
-                .or_else(|| c.get(2))
-                .map(|m| m.as_str().to_string())
-        })
-        .filter_map(|p| Regex::new(&p).ok())
-        .collect()
+    let start_re = Regex::new(r"^\s*allowed_diff\s*=\s*\[").unwrap();
+    for raw_line in text.lines() {
+        // Strip TOML comments, but only the `#` that sits outside any
+        // single- or double-quoted string on this line.
+        let line = strip_line_comment(raw_line);
+        if !in_array {
+            if start_re.is_match(&line) {
+                in_array = true;
+                // The same line may also carry items and/or the closing `]`.
+                for cap in item_re.captures_iter(&line) {
+                    if let Some(p) = cap.get(1).or_else(|| cap.get(2)) {
+                        if let Ok(r) = Regex::new(p.as_str()) {
+                            out.push(r);
+                        }
+                    }
+                }
+                if has_close_bracket_outside_quotes(&line) {
+                    in_array = false;
+                }
+            }
+            continue;
+        }
+        for cap in item_re.captures_iter(&line) {
+            if let Some(p) = cap.get(1).or_else(|| cap.get(2)) {
+                if let Ok(r) = Regex::new(p.as_str()) {
+                    out.push(r);
+                }
+            }
+        }
+        if has_close_bracket_outside_quotes(&line) {
+            in_array = false;
+        }
+    }
+    out
+}
+
+/// Strip a TOML-style trailing `# …` comment, but only when the `#` is not
+/// inside a single- or double-quoted string on the same line.
+fn strip_line_comment(line: &str) -> String {
+    let bytes = line.as_bytes();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut end = bytes.len();
+    for (i, &b) in bytes.iter().enumerate() {
+        match b {
+            b'\'' if !in_double => in_single = !in_single,
+            b'"' if !in_single => in_double = !in_double,
+            b'#' if !in_single && !in_double => {
+                end = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+    line[..end].to_string()
+}
+
+/// True if `line` contains a `]` that is not inside a single- or
+/// double-quoted string. Used to detect the end of an `allowed_diff = [...]`
+/// array without being fooled by a `]` inside a regex character class.
+fn has_close_bracket_outside_quotes(line: &str) -> bool {
+    let mut in_single = false;
+    let mut in_double = false;
+    for &b in line.as_bytes() {
+        match b {
+            b'\'' if !in_double => in_single = !in_single,
+            b'"' if !in_single => in_double = !in_double,
+            b']' if !in_single && !in_double => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 /// Run a single named fixture end-to-end: parse -> execute -> render -> normalize -> diff.
@@ -262,6 +321,32 @@ fn fixture_19_replace_zero_values() {
 #[test]
 fn fixture_20_direct_value_mapping_text_case_match() {
     run_fixture("20_direct_value_mapping_text_case_match");
+}
+
+// ============================================================================
+// Phase 7 fixture tests: SCALE background continuous colour scales.
+// `SCALE background FROM (lo, hi) TO (...) VIA <transform>
+//   SETTING target => <col>`.
+// ============================================================================
+
+#[test]
+fn fixture_22_continuous_color_scale_with_explicit_domain() {
+    run_fixture("22_continuous_color_scale_with_explicit_domain");
+}
+
+#[test]
+fn fixture_23_color_scale_with_auto_inferred_domain() {
+    run_fixture("23_color_scale_with_auto_inferred_domain");
+}
+
+#[test]
+fn fixture_24_named_viridis_palette() {
+    run_fixture("24_named_viridis_palette");
+}
+
+#[test]
+fn fixture_25_log_scaled_color_mapping() {
+    run_fixture("25_log_scaled_color_mapping");
 }
 
 /// Render phase-1 fixtures to a viewable HTML page at
