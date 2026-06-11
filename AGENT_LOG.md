@@ -269,3 +269,69 @@ the deviation or `allowed_diff` justification.
   and composing two HIGHLIGHTs with currency formatting; README updated;
   `examples/tabulate/out/index.html` regenerated.
 - No `allowed_diff` entries added for this phase.
+
+## 2026-06-11 — phase 9 complete
+- Fixtures 29 (single-aggregate per-group `sum`) and 30 (multi-aggregate
+  `min` / `max` / `mean` per week of SP500 data) pass under strict
+  normalization.
+- Grammar: added `tab_facet_clause` to the `tab_clause` choice in
+  `tree-sitter-ggsql/grammar.js`, with `tab_facet_setting_block`,
+  `tab_facet_pair`, `tab_facet_id_list`, and `tab_facet_str_list` rules.
+  Identifier lists use `(a, b, c)` syntax; string lists accept either
+  `('a', 'b')` or `['a', 'b']`. 105/105 tree-sitter corpus tests pass.
+- AST: `TabulateStmt` gained `facet: Option<FacetClause>`. `FacetClause`
+  carries the group column plus a flat `Vec<FacetSetting>` of key/value
+  pairs (`target`, `aggregate`, `label`, `side`) so the executor can
+  validate cross-pair invariants in one place.
+- Execution: `build_table_ir` now drops the group column from
+  `visible_cols`, synthesizes an empty stub column when FACET is set
+  without an explicit `FORMAT STUB <col>` (gt renders the group heading
+  in the stub slot), and calls `build_row_groups` to walk the group
+  column in *discovery order* (HashMap-backed first-seen tracking,
+  matching how gt's R-side captures order). Each group computes summary
+  rows by aggregating the named `target` columns with the named
+  `aggregate` functions; non-target columns render as the em-dash
+  (`U+2014`). `compute_aggregate` covers `sum`, `min`, `max`,
+  `mean` / `avg` / `average`, `median`, and `sd` / `stdev` / `stddev`
+  (sample SD, n-1 divisor). Summary labels default to the aggregate
+  function name; an explicit `label => ('A', 'B', …)` overrides 1:1.
+- Auto formatter: integer-valued double columns previously always
+  rendered as fixed integers below `1e8` and switched to scientific
+  above. Phase 9 introduces a sharper heuristic: integer columns with
+  `max_abs >= 1e6` that round cleanly to 4 significant figures get
+  scientific notation (matching fixture 25's population of `6.500e+05`
+  through `1.412e+09`); integer columns that carry more precision
+  (fixture 30's SP500 volume of `4378680000`) stay as plain integers.
+  Float columns now round to 7 significant figures before the
+  smallest-lossless-dp search, so noisy doubles like `2044.8101` /
+  `2062.1399` settle on 2 dp (matching R's default `digits = 7`) instead
+  of 3.
+- Summary value formatter: per-cell heuristic — integer-valued aggregate
+  results render with thousands separators and no decimal point
+  (`107,000`); fractional results render with thousands separators and
+  2 dp (`1,992.25`). This is independent of the column's body formatter
+  because gt's summary rows are styled independently from body rows.
+- HTML rendering: `render` now branches on whether `table.groups` is
+  empty. Non-empty case emits a `gt_group_heading_row` per group, walks
+  the group's body rows with a `is_first_in_group` flag (which appends
+  `border-top-width: 2px;` to the cell style), then emits summary rows
+  with `gt_first_summary_row thick` on the first and
+  `gt_last_summary_row` on the last. The summary stub TH stays
+  left-aligned regardless of column alignment. `render_tr` gained an
+  `#[allow(clippy::too_many_arguments)]` because the FACET-aware
+  signature legitimately needs 9 inputs.
+- `allowed_diff` justification — fixture 30:
+  `tests/fixtures/30_summary_rows_min_max_mean_with_labels/query.ggsql`
+  was rewritten (precedent: fixture 05) because the captured
+  `expected.html` lists 7 body columns (`date`, `open`, `high`, `low`,
+  `close`, `volume`, `adj_close`) while the original query enumerated
+  only 5, and used the legacy printf flag `{:num ,.2f}` for which the
+  formatter mini-language has no equivalent. The replacement uses
+  `'{:num %.2f}'` (current syntax) and the full 7-column list; the
+  pre-computed `week` column already in the parquet feeds FACET, so the
+  SELECT prefix was dropped. No CSS or `expected.html` changes.
+- New examples 35-37 (`35_facet_basic_grouping`, `36_facet_summary_sum`,
+  `37_facet_multi_aggregate`) demonstrate plain row grouping, a single
+  per-group summary, and multiple aggregates with custom labels; README
+  intro and table updated; `examples/tabulate/out/index.html`
+  regenerated via `bash examples/tabulate/run.sh`.

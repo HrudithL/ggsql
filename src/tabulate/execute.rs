@@ -11,7 +11,9 @@
 
 use crate::parser::{tabulate as tab_parser, SourceTree};
 use crate::reader::Reader;
-use crate::tabulate::ast::{FormatMode, LabelClause, SettingValue, TabulateStmt};
+use crate::tabulate::ast::{
+    FacetSetting, FacetValue, FormatMode, LabelClause, SettingValue, TabulateStmt,
+};
 use crate::{GgsqlError, Result};
 use arrow::array::{Array, ArrayRef, Float64Array, StringArray};
 use arrow::datatypes::{DataType, Schema};
@@ -71,6 +73,10 @@ pub struct TableIr {
     /// later clause's settings override the earlier (gt's last-writer
     /// semantics).
     pub cell_style: Vec<Vec<CellStyle>>,
+    /// Row-groups from a `FACET` clause, in display order. Empty when
+    /// the query has no `FACET`; in that case the renderer walks
+    /// [`Self::rows`] sequentially.
+    pub groups: Vec<RowGroup>,
     /// Table title (gt's `tab_header(title=)`).
     pub title: Option<String>,
     /// Table subtitle (gt's `tab_header(subtitle=)`).
@@ -123,6 +129,35 @@ impl CellStyle {
     pub fn is_empty(&self) -> bool {
         self.background.is_none() && self.color.is_none() && self.face.is_none()
     }
+}
+
+/// A contiguous row-group in a `FACET`-ed table.
+#[derive(Debug, Clone)]
+pub struct RowGroup {
+    /// Group label rendered in the `<tr class="gt_group_heading_row">`
+    /// row before the group's body rows.
+    pub name: String,
+    /// Indices into [`TableIr::rows`] for the body rows belonging to
+    /// this group, in display order.
+    pub row_indices: Vec<usize>,
+    /// Zero or more summary rows emitted after the body rows (when
+    /// `side = 'bottom'`, the default) or before them (`side = 'top'`,
+    /// not yet exercised by a fixture).
+    pub summary_rows: Vec<SummaryRow>,
+    /// Side of the group the summary rows attach to. `"bottom"` (default)
+    /// places summaries after the body rows; `"top"` before.
+    pub summary_side: String,
+}
+
+/// A single summary row computed by an aggregate function over a group.
+#[derive(Debug, Clone)]
+pub struct SummaryRow {
+    /// Text rendered in the stub `<th>` (e.g. `"sum"`, `"Min"`).
+    pub label: String,
+    /// One entry per column in [`TableIr::columns`]. `None` means render
+    /// as the placeholder `—` (em-dash); `Some(text)` is the formatted
+    /// aggregate value.
+    pub cells: Vec<Option<String>>,
 }
 
 /// Node in the header tree. Spanners group child nodes (which may be
@@ -310,7 +345,20 @@ fn build_table_ir(
         .iter()
         .copied()
         .filter(|c| !hidden.iter().any(|h| h.eq_ignore_ascii_case(c)))
+        // The FACET group column drives row partitioning; hide it from
+        // the rendered body (it appears as the group heading text).
+        .filter(|c| {
+            tab_stmt
+                .facet
+                .as_ref()
+                .is_none_or(|f| !f.group_col.eq_ignore_ascii_case(c))
+        })
         .collect();
+
+    // When FACET is set but no `FORMAT STUB` is declared, gt's
+    // `tab_row_group` still emits an empty stub column on the left edge
+    // of the table. We synthesize one as the first ColMeta below.
+    let synthetic_stub = tab_stmt.facet.is_some() && stub_info.is_none();
 
     // gt promotes the stub column to position 0 in the rendered header so it
     // sits left of the spanner block. Mirror that here.
@@ -433,6 +481,21 @@ fn build_table_ir(
         {
             stub_col_idx = Some(idx);
         }
+    }
+
+    // Insert a synthetic empty stub column for FACET-without-FORMAT-STUB.
+    if synthetic_stub {
+        columns.insert(
+            0,
+            ColMeta {
+                name: String::new(),
+                label: String::new(),
+                align: ColAlign::Left,
+                width: None,
+                raw_html: false,
+            },
+        );
+        stub_col_idx = Some(0);
     }
 
     // Collect per-column format-override RHS strings, locales, and direct
@@ -565,7 +628,7 @@ fn build_table_ir(
 
     // Build rows.
     let nrows = combined.num_rows();
-    let rows: Vec<Vec<String>> = (0..nrows)
+    let mut rows: Vec<Vec<String>> = (0..nrows)
         .map(|row_idx| {
             visible_cols
                 .iter()
@@ -644,6 +707,13 @@ fn build_table_ir(
         })
         .collect();
 
+    // Prepend an empty cell for the synthetic stub column when applicable.
+    if synthetic_stub {
+        for row in rows.iter_mut() {
+            row.insert(0, String::new());
+        }
+    }
+
     let (title, subtitle, caption) = match &tab_stmt.label {
         Some(LabelClause {
             title,
@@ -659,11 +729,15 @@ fn build_table_ir(
     let cell_bg = build_cell_bg(tab_stmt, &columns, combined);
     let cell_style = build_cell_style(tab_stmt, &columns, combined);
 
+    // Compute row groups + summary rows from the FACET clause.
+    let groups = build_row_groups(tab_stmt, &columns, stub_col_idx, combined);
+
     Ok(TableIr {
         columns,
         rows,
         cell_bg,
         cell_style,
+        groups,
         title,
         subtitle,
         caption,
@@ -912,6 +986,257 @@ fn build_cell_style(
     out
 }
 
+/// Resolved view of a [`FacetClause`]'s `SETTING` pairs, normalised into
+/// the fields the IR builder actually consumes.
+struct FacetView {
+    target_cols: Vec<String>,
+    aggregates: Vec<String>,
+    labels: Vec<String>,
+    side: String,
+}
+
+impl FacetView {
+    fn from_settings(settings: &[FacetSetting]) -> Self {
+        let mut view = FacetView {
+            target_cols: Vec::new(),
+            aggregates: Vec::new(),
+            labels: Vec::new(),
+            side: "bottom".to_string(),
+        };
+        for s in settings {
+            match s.key.to_ascii_lowercase().as_str() {
+                "target" => {
+                    view.target_cols = match &s.value {
+                        FacetValue::IdentList(v) => v.clone(),
+                        FacetValue::Identifier(v) => vec![v.clone()],
+                        FacetValue::String(v) => vec![v.clone()],
+                        FacetValue::StrList(v) => v.clone(),
+                        _ => Vec::new(),
+                    }
+                }
+                "aggregate" => {
+                    view.aggregates = match &s.value {
+                        FacetValue::StrList(v) => v.clone(),
+                        FacetValue::IdentList(v) => v.clone(),
+                        FacetValue::String(v) => vec![v.clone()],
+                        FacetValue::Identifier(v) => vec![v.clone()],
+                        _ => Vec::new(),
+                    }
+                }
+                "label" => {
+                    view.labels = match &s.value {
+                        FacetValue::StrList(v) => v.clone(),
+                        FacetValue::IdentList(v) => v.clone(),
+                        FacetValue::String(v) => vec![v.clone()],
+                        FacetValue::Identifier(v) => vec![v.clone()],
+                        _ => Vec::new(),
+                    }
+                }
+                "side" => {
+                    view.side = match &s.value {
+                        FacetValue::String(v) => v.clone(),
+                        FacetValue::Identifier(v) => v.clone(),
+                        _ => view.side,
+                    }
+                }
+                _ => {}
+            }
+        }
+        view
+    }
+}
+
+/// Apply an aggregate function to a numeric slice. Returns `None` for an
+/// empty slice or an unrecognised function name. `sd` is the sample
+/// standard deviation (divisor `n-1`).
+fn compute_aggregate(values: &[f64], name: &str) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    let n = values.len() as f64;
+    match name.to_ascii_lowercase().as_str() {
+        "sum" => Some(values.iter().sum()),
+        "min" => values.iter().copied().reduce(f64::min),
+        "max" => values.iter().copied().reduce(f64::max),
+        "mean" | "avg" | "average" => Some(values.iter().sum::<f64>() / n),
+        "median" => {
+            let mut v: Vec<f64> = values.to_vec();
+            v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let m = v.len();
+            if m % 2 == 1 {
+                Some(v[m / 2])
+            } else {
+                Some((v[m / 2 - 1] + v[m / 2]) / 2.0)
+            }
+        }
+        "sd" | "stdev" | "stddev" => {
+            if values.len() < 2 {
+                return Some(0.0);
+            }
+            let mean = values.iter().sum::<f64>() / n;
+            let var = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n - 1.0);
+            Some(var.sqrt())
+        }
+        _ => None,
+    }
+}
+
+/// Format a summary-row aggregate value to match gt's
+/// `tab_summary_rows()` default rendering: integer-valued aggregates
+/// render without separators and without decimals (e.g. `107000`);
+/// fractional aggregates render with thousands separators and two
+/// decimals (e.g. `1,992.25`).
+fn format_summary_value(v: f64) -> String {
+    if !v.is_finite() {
+        return "NA".to_string();
+    }
+    let is_int = (v - v.round()).abs() < 1e-9 * v.abs().max(1.0);
+    if is_int {
+        format!("{}", v.round() as i64)
+    } else {
+        format_with_thousands(v, 2)
+    }
+}
+
+fn format_with_thousands(v: f64, dp: usize) -> String {
+    let s = format!("{:.*}", dp, v);
+    let (sign, rest) = if let Some(r) = s.strip_prefix('-') {
+        ("-", r)
+    } else {
+        ("", s.as_str())
+    };
+    let (int_part, frac_part) = match rest.find('.') {
+        Some(i) => (&rest[..i], &rest[i..]),
+        None => (rest, ""),
+    };
+    let mut out_rev = String::new();
+    for (i, ch) in int_part.chars().rev().enumerate() {
+        if i > 0 && i % 3 == 0 {
+            out_rev.push(',');
+        }
+        out_rev.push(ch);
+    }
+    let int_with_seps: String = out_rev.chars().rev().collect();
+    format!("{}{}{}", sign, int_with_seps, frac_part)
+}
+
+/// Partition rows into [`RowGroup`]s using the FACET clause's group
+/// column. Groups appear in discovery order (the order in which their
+/// first row is encountered) and each group collects all rows whose
+/// group-column value equals the group name.
+fn build_row_groups(
+    tab_stmt: &TabulateStmt,
+    columns: &[ColMeta],
+    stub_col_idx: Option<usize>,
+    combined: &RecordBatch,
+) -> Vec<RowGroup> {
+    let Some(facet) = &tab_stmt.facet else {
+        return Vec::new();
+    };
+    let nrows = combined.num_rows();
+    let schema = combined.schema();
+    let group_idx = match schema.index_of(&facet.group_col) {
+        Ok(i) => i,
+        Err(_) => return Vec::new(),
+    };
+    let group_arr = combined.column(group_idx);
+
+    let group_values: Vec<String> = (0..nrows)
+        .map(|i| format_cell(group_arr, i, None))
+        .collect();
+
+    let mut order: Vec<String> = Vec::new();
+    let mut row_indices_by: HashMap<String, Vec<usize>> = HashMap::new();
+    for (i, v) in group_values.iter().enumerate() {
+        if !row_indices_by.contains_key(v) {
+            order.push(v.clone());
+        }
+        row_indices_by.entry(v.clone()).or_default().push(i);
+    }
+
+    let view = FacetView::from_settings(&facet.settings);
+
+    // Map target column names → column index in `columns` for cell placement.
+    let target_idxs: Vec<(String, usize)> = view
+        .target_cols
+        .iter()
+        .filter_map(|t| {
+            columns
+                .iter()
+                .position(|c| c.name.eq_ignore_ascii_case(t))
+                .map(|i| (t.clone(), i))
+        })
+        .collect();
+
+    // Map each target column to its arrow data column for aggregate compute.
+    let target_data: Vec<(usize, ArrayRef)> = view
+        .target_cols
+        .iter()
+        .filter_map(|t| {
+            let col_idx = columns
+                .iter()
+                .position(|c| c.name.eq_ignore_ascii_case(t))?;
+            let data_idx = schema.index_of(t).ok()?;
+            Some((col_idx, combined.column(data_idx).clone()))
+        })
+        .collect();
+
+    order
+        .into_iter()
+        .map(|name| {
+            let row_indices = row_indices_by.remove(&name).unwrap();
+
+            let summary_rows: Vec<SummaryRow> = view
+                .aggregates
+                .iter()
+                .enumerate()
+                .map(|(agg_idx, agg)| {
+                    // Per-target-column aggregate values keyed by column index.
+                    let mut values_by_col: HashMap<usize, Option<f64>> = HashMap::new();
+                    for (col_idx, arr) in &target_data {
+                        let vals: Vec<f64> = row_indices
+                            .iter()
+                            .filter_map(|&r| numeric_to_f64(arr, r))
+                            .collect();
+                        values_by_col.insert(*col_idx, compute_aggregate(&vals, agg));
+                    }
+
+                    let cells: Vec<Option<String>> = (0..columns.len())
+                        .map(|col_idx| {
+                            if Some(col_idx) == stub_col_idx {
+                                return None; // stub holds the label, set below
+                            }
+                            if !target_idxs.iter().any(|(_, i)| *i == col_idx) {
+                                return None; // non-target → em-dash
+                            }
+                            values_by_col
+                                .get(&col_idx)
+                                .copied()
+                                .flatten()
+                                .map(format_summary_value)
+                        })
+                        .collect();
+
+                    let label = if agg_idx < view.labels.len() {
+                        view.labels[agg_idx].clone()
+                    } else {
+                        agg.clone()
+                    };
+
+                    SummaryRow { label, cells }
+                })
+                .collect();
+
+            RowGroup {
+                name,
+                row_indices,
+                summary_rows,
+                summary_side: view.side.clone(),
+            }
+        })
+        .collect()
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -1121,6 +1446,7 @@ fn build_float_formatter(values: &[Option<f64>]) -> Box<dyn Fn(Option<f64>) -> S
         .iter()
         .filter_map(|v| *v)
         .filter(|v| v.is_finite())
+        .map(|v| round_to_sig_figs(v, 7))
         .collect();
 
     if non_null.is_empty() {
@@ -1141,10 +1467,20 @@ fn build_float_formatter(values: &[Option<f64>]) -> Box<dyn Fn(Option<f64>) -> S
         // gt's R-side default rendering of a numeric vector falls back to
         // `format()`, which picks scientific notation when the shortest
         // representation of the largest value is shorter as `X.XXXe+YY`
-        // than as a fixed integer. That switch kicks in around `max_abs >=
-        // 1e8` (e.g. 1.412e+09 is 9 chars vs 1412000000 at 10), so we use
-        // that threshold for the whole column.
-        if max_abs >= 1e8 {
+        // than as fixed. R's threshold for an *integer*-valued column
+        // (e.g. `c(650000, 1.4e9)`) is around `1e6`, *provided* each
+        // value is clean to ~4 significant figures — that's the regime
+        // where scientific buys you space without losing information.
+        // Columns like SP500 daily volume (`4378680000`) carry 7+ sig
+        // figs and need the full integer string; gt renders them
+        // verbatim. We approximate gt by gating scientific notation on
+        // "all values round to 4 sf without change".
+        let scientific_friendly = max_abs >= 1e6
+            && non_null.iter().all(|v| {
+                let r = round_to_sig_figs(*v, 4);
+                (r - v).abs() <= 1e-6 * v.abs().max(1.0)
+            });
+        if scientific_friendly {
             return Box::new(|v: Option<f64>| match v {
                 None => "NA".to_string(),
                 Some(x) if x.is_nan() => "NA".to_string(),
@@ -1183,8 +1519,23 @@ fn build_float_formatter(values: &[Option<f64>]) -> Box<dyn Fn(Option<f64>) -> S
         None => "NA".to_string(),
         Some(x) if x.is_nan() => "NA".to_string(),
         Some(x) if use_scientific => format_scientific_3dp(x),
-        Some(x) => format!("{:.*}", dp, x),
+        Some(x) => format!("{:.*}", dp, round_to_sig_figs(x, 7)),
     })
+}
+
+/// Round `x` to `sig` significant figures, matching R's `signif()` for
+/// positive `sig` and finite, non-zero `x`. Used by the auto formatter
+/// before it picks a uniform decimal-place count so columns like SP500
+/// `adj_close` (where the raw doubles carry trailing 1-bit noise such as
+/// `2044.8101`) round to gt's displayed precision (`2044.81`).
+fn round_to_sig_figs(x: f64, sig: u32) -> f64 {
+    if x == 0.0 || !x.is_finite() || sig == 0 {
+        return x;
+    }
+    let d = x.abs().log10().floor() as i32 + 1;
+    let power = sig as i32 - d;
+    let factor = 10f64.powi(power);
+    (x * factor).round() / factor
 }
 
 /// Format a float in scientific notation with 3 mantissa decimal places,

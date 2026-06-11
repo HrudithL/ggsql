@@ -13,7 +13,9 @@ continuous colour scales — named palettes, explicit colour stops,
 explicit `FROM (lo, hi)` domain, and `VIA log10` transform), and
 phase 8 (`HIGHLIGHT <cols> FILTER <SQL predicate> SETTING ...` for
 predicate-driven cell-level highlights, including multiple HIGHLIGHTs
-in the same query).
+in the same query), and phase 9 (`FACET <col>` for row grouping with
+an optional `SETTING target / aggregate / label / side` block to emit
+per-group summary rows).
 
 ## Run all examples
 
@@ -82,3 +84,6 @@ a browser:
 | [`32_highlight_failing_scores.ggsql`](32_highlight_failing_scores.ggsql) | `HIGHLIGHT score FILTER score < 60 SETTING face => 'bold', color => 'red'` — single-column conditional cell highlight |
 | [`33_highlight_region_row.ggsql`](33_highlight_region_row.ggsql) | `HIGHLIGHT revenue, units, margin FILTER region = 'West' SETTING background => '#fff3cd'` — multi-column highlight on rows matching a predicate |
 | [`34_highlight_up_down_days.ggsql`](34_highlight_up_down_days.ggsql) | Two `HIGHLIGHT` clauses (up-day green, down-day red) composed with currency formatting |
+| [`35_facet_basic_grouping.ggsql`](35_facet_basic_grouping.ggsql) | `FACET category` — group body rows by a column with a heading row per group |
+| [`36_facet_summary_sum.ggsql`](36_facet_summary_sum.ggsql) | `FACET … SETTING target => (cols), aggregate => ('sum')` — one summary row per group |
+| [`37_facet_multi_aggregate.ggsql`](37_facet_multi_aggregate.ggsql) | Multiple aggregates (`min`, `max`, `mean`) with custom `label` overrides |
