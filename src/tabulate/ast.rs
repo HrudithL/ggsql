@@ -18,6 +18,37 @@ pub struct TabulateStmt {
     pub scale_clauses: Vec<ScaleClause>,
     /// Zero or more HIGHLIGHT clauses.
     pub highlight_clauses: Vec<HighlightClause>,
+    /// At most one FACET clause: partitions rows into groups by a column
+    /// value and optionally emits per-group summary rows.
+    pub facet: Option<FacetClause>,
+}
+
+/// `FACET <group_col> [SETTING target => (...), aggregate => (...),
+///                              label => [...], side => '...']`
+#[derive(Debug, Clone)]
+pub struct FacetClause {
+    /// Column whose values define the row groups.
+    pub group_col: String,
+    /// Raw `SETTING` pairs (interpreted in [`super::execute`]).
+    pub settings: Vec<FacetSetting>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FacetSetting {
+    pub key: String,
+    pub value: FacetValue,
+}
+
+#[derive(Debug, Clone)]
+pub enum FacetValue {
+    String(String),
+    Number(f64),
+    Bool(bool),
+    Identifier(String),
+    /// `(id, id, ...)`
+    IdentList(Vec<String>),
+    /// `('s', 's', ...)` or `['s', 's', ...]`
+    StrList(Vec<String>),
 }
 
 /// A `HIGHLIGHT <col>[, <col>...] FILTER <pred> SETTING <k> => <v>, ...` clause.

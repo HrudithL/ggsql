@@ -2,8 +2,9 @@
 
 use crate::parser::SourceTree;
 use crate::tabulate::ast::{
-    FormatClause, FormatMode, FormatRenaming, FormatSetting, HighlightClause, HighlightSetting,
-    LabelClause, RenamingLhs, ScaleClause, ScalePalette, SettingValue, TabulateStmt,
+    FacetClause, FacetSetting, FacetValue, FormatClause, FormatMode, FormatRenaming, FormatSetting,
+    HighlightClause, HighlightSetting, LabelClause, RenamingLhs, ScaleClause, ScalePalette,
+    SettingValue, TabulateStmt,
 };
 use crate::{GgsqlError, Result};
 
@@ -78,6 +79,19 @@ pub fn parse_tabulate(source: &SourceTree<'_>) -> Result<TabulateStmt> {
         .map(|n| parse_highlight_clause(source, &n))
         .collect::<Result<Vec<_>>>()?;
 
+    // --- FACET clause (at most one) ---
+    let facet_nodes = source.find_nodes(&stmt, "(tab_facet_clause) @fc");
+    if facet_nodes.len() > 1 {
+        return Err(GgsqlError::ParseError(
+            "TABULATE allows at most one FACET clause".to_string(),
+        ));
+    }
+    let facet = facet_nodes
+        .into_iter()
+        .next()
+        .map(|n| parse_facet_clause(source, &n))
+        .transpose()?;
+
     Ok(TabulateStmt {
         columns,
         from_source,
@@ -85,6 +99,7 @@ pub fn parse_tabulate(source: &SourceTree<'_>) -> Result<TabulateStmt> {
         label,
         scale_clauses,
         highlight_clauses,
+        facet,
     })
 }
 
@@ -531,4 +546,80 @@ fn parse_highlight_pair(
         .ok_or_else(|| GgsqlError::ParseError("HIGHLIGHT SETTING missing key".to_string()))?;
     let value = parse_setting_value(source, node)?;
     Ok(HighlightSetting { key, value })
+}
+
+fn parse_facet_clause(
+    source: &SourceTree<'_>,
+    node: &tree_sitter::Node<'_>,
+) -> Result<FacetClause> {
+    let group_col = node
+        .child_by_field_name("group")
+        .map(|n| source.get_text(&n))
+        .ok_or_else(|| GgsqlError::ParseError("FACET missing group column".to_string()))?;
+
+    let settings: Vec<FacetSetting> = source
+        .find_nodes(node, "(tab_facet_setting_block) @b")
+        .into_iter()
+        .next()
+        .map(|sb| {
+            source
+                .find_nodes(&sb, "(tab_facet_pair) @p")
+                .into_iter()
+                .map(|p| parse_facet_pair(source, &p))
+                .collect::<Result<Vec<_>>>()
+        })
+        .unwrap_or_else(|| Ok(Vec::new()))?;
+
+    Ok(FacetClause {
+        group_col,
+        settings,
+    })
+}
+
+fn parse_facet_pair(source: &SourceTree<'_>, node: &tree_sitter::Node<'_>) -> Result<FacetSetting> {
+    let key = node
+        .child_by_field_name("key")
+        .map(|n| source.get_text(&n))
+        .ok_or_else(|| GgsqlError::ParseError("FACET SETTING missing key".to_string()))?;
+
+    // The value is one of: string, number, boolean, identifier, ident list, str list.
+    let value = node
+        .child_by_field_name("value")
+        .ok_or_else(|| GgsqlError::ParseError("FACET SETTING missing value".to_string()))?;
+
+    let parsed = match value.kind() {
+        "string" => FacetValue::String(unquote_string(&source.get_text(&value))),
+        "number" => {
+            let t = source.get_text(&value);
+            FacetValue::Number(
+                t.parse()
+                    .map_err(|_| GgsqlError::ParseError(format!("Invalid number '{}'", t)))?,
+            )
+        }
+        "boolean" => FacetValue::Bool(source.get_text(&value) == "true"),
+        "identifier" => FacetValue::Identifier(source.get_text(&value)),
+        "tab_facet_id_list" => {
+            let ids: Vec<String> = source
+                .find_nodes(&value, "(identifier) @id")
+                .into_iter()
+                .map(|n| source.get_text(&n))
+                .collect();
+            FacetValue::IdentList(ids)
+        }
+        "tab_facet_str_list" => {
+            let strs: Vec<String> = source
+                .find_nodes(&value, "(string) @s")
+                .into_iter()
+                .map(|n| unquote_string(&source.get_text(&n)))
+                .collect();
+            FacetValue::StrList(strs)
+        }
+        other => {
+            return Err(GgsqlError::ParseError(format!(
+                "Unsupported FACET value kind '{}'",
+                other
+            )))
+        }
+    };
+    Ok(FacetSetting { key, value: parsed })
 }

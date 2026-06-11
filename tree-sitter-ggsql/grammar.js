@@ -611,6 +611,56 @@ module.exports = grammar({
       $.label_clause,
       $.tab_scale_clause,
       $.tab_highlight_clause,
+      $.tab_facet_clause,
+    ),
+
+    // FACET <group_col>
+    //   [SETTING target => (col, ...), aggregate => ('fn', ...),
+    //            label => ['Label', ...], side => 'top'|'bottom']
+    //
+    // Splits the table into row-groups by the value of `group_col` and
+    // emits one or more summary rows per group computed from the listed
+    // aggregate functions over the `target` columns.
+    tab_facet_clause: $ => prec.right(seq(
+      caseInsensitive('FACET'),
+      field('group', $.identifier),
+      optional($.tab_facet_setting_block)
+    )),
+
+    tab_facet_setting_block: $ => seq(
+      caseInsensitive('SETTING'),
+      $.tab_facet_pair,
+      repeat(seq(',', $.tab_facet_pair))
+    ),
+
+    tab_facet_pair: $ => seq(
+      field('key', $.identifier),
+      '=>',
+      field('value', choice(
+        $.string,
+        $.number,
+        $.boolean,
+        $.tab_facet_id_list,
+        $.tab_facet_str_list,
+        $.identifier
+      ))
+    ),
+
+    tab_facet_id_list: $ => seq(
+      '(',
+      $.identifier,
+      repeat(seq(',', $.identifier)),
+      ')'
+    ),
+
+    // Strings may be wrapped in either `(...)` or `[...]` — gt accepts
+    // both forms and the GTSQL spec lists labels with square brackets
+    // while aggregate names use parens.
+    tab_facet_str_list: $ => seq(
+      choice('(', '['),
+      $.string,
+      repeat(seq(',', $.string)),
+      choice(')', ']')
     ),
 
     // HIGHLIGHT <col> [, <col> ...]

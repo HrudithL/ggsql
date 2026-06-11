@@ -370,6 +370,20 @@ fn fixture_28_up_down_day_stock_highlight_two_highlights() {
     run_fixture("28_up_down_day_stock_highlight_two_highlights");
 }
 
+// ============================================================================
+// Phase 9 — FACET (row grouping) and tab_summary_rows-style summary rows.
+// ============================================================================
+
+#[test]
+fn fixture_29_summary_rows_single_sum() {
+    run_fixture("29_summary_rows_single_sum");
+}
+
+#[test]
+fn fixture_30_summary_rows_min_max_mean_with_labels() {
+    run_fixture("30_summary_rows_min_max_mean_with_labels");
+}
+
 /// Render phase-1 fixtures to a viewable HTML page at
 /// `target/tabulate_demo.html`. Ignored by default; run with
 /// `cargo test --test tabulate_fixtures emit_demo -- --include-ignored --nocapture`.

@@ -1,0 +1,20 @@
+-- Multiple `aggregate` functions produce multiple summary rows per group;
+-- `label` overrides the default labels. Available aggregates: `sum`,
+-- `min`, `max`, `mean` (alias `avg`), `median`, `sd`. `side => 'top'`
+-- places the summary rows above the body rows; the default is `'bottom'`.
+SELECT * FROM (VALUES
+  ('North', 'Q1',  120.5),
+  ('North', 'Q2',  148.2),
+  ('North', 'Q3',  132.7),
+  ('North', 'Q4',  160.4),
+  ('South', 'Q1',   95.3),
+  ('South', 'Q2',  102.6),
+  ('South', 'Q3',  118.9),
+  ('South', 'Q4',  127.0)
+) AS sales(region, quarter, amount)
+TABULATE quarter, amount
+FORMAT amount RENAMING * => '${:num %.2f}'
+FACET region
+  SETTING target => (amount),
+          aggregate => ('min', 'max', 'mean'),
+          label => ('Low', 'High', 'Average')

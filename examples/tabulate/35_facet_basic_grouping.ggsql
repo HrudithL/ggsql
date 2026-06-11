@@ -1,0 +1,12 @@
+-- `FACET <col>` groups body rows by the named column, emitting a heading
+-- row before each group and dropping the column from the body. The
+-- enclosing TABULATE column list doesn't need to mention the grouping
+-- column.
+SELECT * FROM (VALUES
+  ('Hardware', 'Widget',     45000, 450),
+  ('Hardware', 'Gadget',     62000, 620),
+  ('Software', 'Gizmo',      38000, 380),
+  ('Software', 'Doohickey',  51000, 510)
+) AS sales(category, product, revenue, units)
+TABULATE product, revenue, units
+FACET category
