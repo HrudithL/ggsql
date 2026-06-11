@@ -1,0 +1,16 @@
+-- `HIGHLIGHT <col> FILTER <SQL predicate> SETTING <key> => <value>, ...`
+-- flags individual cells when the row matches the predicate. Here failing
+-- scores (< 60) get a bold red foreground on the score column only — the
+-- name and grade columns stay neutral.
+SELECT * FROM (VALUES
+  ('Alice',  92, 'A'),
+  ('Bob',    58, 'F'),
+  ('Carla',  74, 'C'),
+  ('Dan',    45, 'F'),
+  ('Eve',    88, 'B'),
+  ('Frank',  67, 'D')
+) AS students(name, score, grade)
+TABULATE name, score, grade
+HIGHLIGHT score
+  FILTER score < 60
+  SETTING face => 'bold', color => 'red'

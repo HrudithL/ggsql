@@ -2,8 +2,8 @@
 
 use crate::parser::SourceTree;
 use crate::tabulate::ast::{
-    FormatClause, FormatMode, FormatRenaming, FormatSetting, LabelClause, RenamingLhs, ScaleClause,
-    ScalePalette, SettingValue, TabulateStmt,
+    FormatClause, FormatMode, FormatRenaming, FormatSetting, HighlightClause, HighlightSetting,
+    LabelClause, RenamingLhs, ScaleClause, ScalePalette, SettingValue, TabulateStmt,
 };
 use crate::{GgsqlError, Result};
 
@@ -71,12 +71,20 @@ pub fn parse_tabulate(source: &SourceTree<'_>) -> Result<TabulateStmt> {
         .map(|n| parse_scale_clause(source, &n))
         .collect::<Result<Vec<_>>>()?;
 
+    // --- HIGHLIGHT clauses ---
+    let hl_nodes = source.find_nodes(&stmt, "(tab_highlight_clause) @hc");
+    let highlight_clauses: Vec<HighlightClause> = hl_nodes
+        .into_iter()
+        .map(|n| parse_highlight_clause(source, &n))
+        .collect::<Result<Vec<_>>>()?;
+
     Ok(TabulateStmt {
         columns,
         from_source,
         format_clauses,
         label,
         scale_clauses,
+        highlight_clauses,
     })
 }
 
@@ -449,4 +457,78 @@ fn parse_scale_clause(
         transform,
         target_cols,
     })
+}
+
+fn parse_highlight_clause(
+    source: &SourceTree<'_>,
+    node: &tree_sitter::Node<'_>,
+) -> Result<HighlightClause> {
+    // Columns: the bare identifier children that appear before the
+    // (filter_clause) — they are listed comma-separated right after
+    // the HIGHLIGHT keyword.
+    let filter_node = source
+        .find_nodes(node, "(filter_clause) @fc")
+        .into_iter()
+        .next()
+        .ok_or_else(|| GgsqlError::ParseError("HIGHLIGHT missing FILTER clause".to_string()))?;
+
+    let mut columns: Vec<String> = Vec::new();
+    {
+        let filter_start = filter_node.start_byte();
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() != "identifier" {
+                continue;
+            }
+            if child.start_byte() >= filter_start {
+                break;
+            }
+            columns.push(source.get_text(&child));
+        }
+    }
+    if columns.is_empty() {
+        return Err(GgsqlError::ParseError(
+            "HIGHLIGHT requires at least one column".to_string(),
+        ));
+    }
+
+    // FILTER expression is captured raw and forwarded to the SQL backend.
+    let filter = source
+        .find_nodes(&filter_node, "(filter_expression) @fe")
+        .into_iter()
+        .next()
+        .map(|n| source.get_text(&n).trim().to_string())
+        .ok_or_else(|| GgsqlError::ParseError("HIGHLIGHT FILTER missing expression".to_string()))?;
+
+    // SETTING <k> => <v>, ... (optional)
+    let settings: Vec<HighlightSetting> = source
+        .find_nodes(node, "(tab_highlight_setting) @hs")
+        .into_iter()
+        .next()
+        .map(|hs| {
+            source
+                .find_nodes(&hs, "(tab_highlight_pair) @hp")
+                .into_iter()
+                .map(|pair| parse_highlight_pair(source, &pair))
+                .collect::<Result<Vec<_>>>()
+        })
+        .unwrap_or_else(|| Ok(Vec::new()))?;
+
+    Ok(HighlightClause {
+        columns,
+        filter,
+        settings,
+    })
+}
+
+fn parse_highlight_pair(
+    source: &SourceTree<'_>,
+    node: &tree_sitter::Node<'_>,
+) -> Result<HighlightSetting> {
+    let key = node
+        .child_by_field_name("key")
+        .map(|n| source.get_text(&n))
+        .ok_or_else(|| GgsqlError::ParseError("HIGHLIGHT SETTING missing key".to_string()))?;
+    let value = parse_setting_value(source, node)?;
+    Ok(HighlightSetting { key, value })
 }

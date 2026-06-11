@@ -1,0 +1,14 @@
+-- A HIGHLIGHT column list applies the same style to every listed column on
+-- rows where the FILTER predicate is true. Here the entire row for the
+-- "West" region picks up the soft-yellow background, while the row label
+-- column (`region`) stays unhighlighted because it is not in the list.
+SELECT * FROM (VALUES
+  ('North', 120000, 1200, 0.18),
+  ('South',  98000,  980, 0.22),
+  ('East',  145000, 1450, 0.15),
+  ('West',  132000, 1320, 0.27)
+) AS sales(region, revenue, units, margin)
+TABULATE region, revenue, units, margin
+HIGHLIGHT revenue, units, margin
+  FILTER region = 'West'
+  SETTING background => '#fff3cd'

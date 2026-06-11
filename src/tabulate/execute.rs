@@ -65,6 +65,12 @@ pub struct TableIr {
     /// HTML writer derives the contrasting foreground colour via
     /// [`super::scale::ideal_fg`].
     pub cell_bg: Vec<Vec<Option<String>>>,
+    /// Per-cell style overrides from `HIGHLIGHT` clauses. Same shape as
+    /// [`Self::rows`]. Empty `CellStyle` (all `None`) means no highlight
+    /// applies. When multiple `HIGHLIGHT`s target the same cell, the
+    /// later clause's settings override the earlier (gt's last-writer
+    /// semantics).
+    pub cell_style: Vec<Vec<CellStyle>>,
     /// Table title (gt's `tab_header(title=)`).
     pub title: Option<String>,
     /// Table subtitle (gt's `tab_header(subtitle=)`).
@@ -96,6 +102,27 @@ pub struct ColMeta {
     /// only set by the scientific-notation formatter `{:num %.Ne}`) and
     /// must not be HTML-escaped by the renderer.
     pub raw_html: bool,
+}
+
+/// Per-cell style overrides from `HIGHLIGHT` clauses.
+///
+/// Each `Option<String>` carries the resolved CSS value (uppercase hex
+/// for colours, raw token for `face`). `None` means "not set by any
+/// HIGHLIGHT matching this cell".
+#[derive(Debug, Clone, Default)]
+pub struct CellStyle {
+    /// `background => '<css colour>'` → uppercase `#RRGGBB`.
+    pub background: Option<String>,
+    /// `color => '<css colour>'` → uppercase `#RRGGBB`.
+    pub color: Option<String>,
+    /// `face => 'bold' | 'italic' | 'normal'` (rendered verbatim).
+    pub face: Option<String>,
+}
+
+impl CellStyle {
+    pub fn is_empty(&self) -> bool {
+        self.background.is_none() && self.color.is_none() && self.face.is_none()
+    }
 }
 
 /// Node in the header tree. Spanners group child nodes (which may be
@@ -240,6 +267,8 @@ fn build_table_ir(
         .fields()
         .iter()
         .map(|f| f.name().as_str())
+        // Synthetic HIGHLIGHT predicate columns are not user-visible.
+        .filter(|n| !n.starts_with(HL_COL_PREFIX))
         .collect();
 
     let display_cols: Vec<&str> = if requested_cols.is_empty() {
@@ -628,11 +657,13 @@ fn build_table_ir(
     let header_forest = build_header_forest(tab_stmt, &columns, &label_map);
 
     let cell_bg = build_cell_bg(tab_stmt, &columns, combined);
+    let cell_style = build_cell_style(tab_stmt, &columns, combined);
 
     Ok(TableIr {
         columns,
         rows,
         cell_bg,
+        cell_style,
         title,
         subtitle,
         caption,
@@ -794,6 +825,93 @@ fn build_cell_bg(
     out
 }
 
+/// Build the per-cell highlight-style matrix from `HIGHLIGHT` clauses.
+///
+/// Each highlight contributes a boolean predicate column (named
+/// `__hl_<N>_match`) added in [`build_sql`]. For every row where the
+/// predicate is true, the highlight's `SETTING` values are applied to
+/// every cell in the highlight's column list. Later highlights override
+/// earlier ones on conflict — matching gt's `tab_style` semantics
+/// observed in fixture 28.
+fn build_cell_style(
+    tab_stmt: &TabulateStmt,
+    columns: &[ColMeta],
+    combined: &RecordBatch,
+) -> Vec<Vec<CellStyle>> {
+    let nrows = combined.num_rows();
+    let ncols = columns.len();
+    let mut out: Vec<Vec<CellStyle>> = (0..nrows)
+        .map(|_| (0..ncols).map(|_| CellStyle::default()).collect())
+        .collect();
+
+    let schema = combined.schema();
+    for (hl_idx, hl) in tab_stmt.highlight_clauses.iter().enumerate() {
+        let pred_name = format!("{}{}__match", HL_COL_PREFIX, hl_idx);
+        let pred_col_idx = match schema.index_of(&pred_name) {
+            Ok(i) => i,
+            Err(_) => continue,
+        };
+        let pred_arr = combined.column(pred_col_idx);
+        let pred_bool = pred_arr
+            .as_any()
+            .downcast_ref::<arrow::array::BooleanArray>();
+
+        let target_col_idxs: Vec<usize> = hl
+            .columns
+            .iter()
+            .filter_map(|c| {
+                columns
+                    .iter()
+                    .position(|cm| cm.name.eq_ignore_ascii_case(c))
+            })
+            .collect();
+        if target_col_idxs.is_empty() {
+            continue;
+        }
+
+        // Pre-resolve each SETTING into the CSS-ready value once.
+        let mut bg: Option<String> = None;
+        let mut color: Option<String> = None;
+        let mut face: Option<String> = None;
+        for s in &hl.settings {
+            let val = match &s.value {
+                crate::tabulate::ast::SettingValue::String(v) => v.clone(),
+                crate::tabulate::ast::SettingValue::Number(n) => n.to_string(),
+                crate::tabulate::ast::SettingValue::Bool(b) => b.to_string(),
+            };
+            match s.key.to_ascii_lowercase().as_str() {
+                "background" => bg = Some(crate::tabulate::scale::parse_to_hex_upper(&val)),
+                "color" => color = Some(crate::tabulate::scale::parse_to_hex_upper(&val)),
+                "face" => face = Some(val),
+                _ => {}
+            }
+        }
+
+        for (row_idx, row_cells) in out.iter_mut().enumerate().take(nrows) {
+            let matches = match pred_bool {
+                Some(b) => !b.is_null(row_idx) && b.value(row_idx),
+                None => false,
+            };
+            if !matches {
+                continue;
+            }
+            for &col_idx in &target_col_idxs {
+                let cs = &mut row_cells[col_idx];
+                if let Some(b) = &bg {
+                    cs.background = Some(b.clone());
+                }
+                if let Some(c) = &color {
+                    cs.color = Some(c.clone());
+                }
+                if let Some(f) = &face {
+                    cs.face = Some(f.clone());
+                }
+            }
+        }
+    }
+    out
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -819,16 +937,41 @@ fn determine_table_name(source: &SourceTree<'_>, tab_stmt: &TabulateStmt) -> Str
 
 /// Build the SQL to execute. If there is a SQL portion, use it unchanged.
 /// Otherwise build `SELECT * FROM <source>`.
-fn build_sql(source: &SourceTree<'_>, _tab_stmt: &TabulateStmt, table_name: &str) -> String {
+///
+/// When the TABULATE statement contains `HIGHLIGHT … FILTER …` clauses, the
+/// returned SQL wraps the base query in a subquery and appends one boolean
+/// projection column per highlight (`__hl_<N>_match`). The IR builder reads
+/// those columns to populate the per-cell style matrix and then strips them
+/// from the visible column list.
+fn build_sql(source: &SourceTree<'_>, tab_stmt: &TabulateStmt, table_name: &str) -> String {
     let root = source.root();
-    // Check for a sql_portion node.
     let sql_nodes = source.find_nodes(&root, "(sql_portion) @s");
-    if let Some(sql_node) = sql_nodes.into_iter().next() {
-        return source.get_text(&sql_node);
+    let base = if let Some(sql_node) = sql_nodes.into_iter().next() {
+        source
+            .get_text(&sql_node)
+            .trim()
+            .trim_end_matches(';')
+            .to_string()
+    } else {
+        format!("SELECT * FROM {}", table_name)
+    };
+    if tab_stmt.highlight_clauses.is_empty() {
+        return base;
     }
-    // Standalone TABULATE — generate SELECT.
-    format!("SELECT * FROM {}", table_name)
+    let mut select = String::from("SELECT __t.*");
+    for (i, hl) in tab_stmt.highlight_clauses.iter().enumerate() {
+        select.push_str(&format!(
+            ", ({}) AS {}{}__match",
+            hl.filter, HL_COL_PREFIX, i
+        ));
+    }
+    select.push_str(&format!(" FROM ({}) __t", base));
+    select
 }
+
+/// Prefix for synthetic boolean projection columns added by `build_sql` when
+/// the query has `HIGHLIGHT` clauses.
+pub(crate) const HL_COL_PREFIX: &str = "__hl_";
 
 /// Determine alignment for a column given the original Arrow schema (if
 /// available — e.g. when reading directly from parquet) and the actual data

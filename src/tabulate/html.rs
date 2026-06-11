@@ -4,7 +4,7 @@
 //! is essentially empty. We emit the same inline-style HTML structure.
 
 use super::GT_DEFAULT_CSS;
-use crate::tabulate::execute::{ColAlign, ColMeta, HeaderNode, TableIr};
+use crate::tabulate::execute::{CellStyle, ColAlign, ColMeta, HeaderNode, TableIr};
 use uuid::Uuid;
 
 // ============================================================================
@@ -277,12 +277,14 @@ pub fn render(table: &TableIr) -> String {
     ));
     for (row_idx, row) in table.rows.iter().enumerate() {
         let bg_row = table.cell_bg.get(row_idx).map(|v| v.as_slice());
+        let style_row = table.cell_style.get(row_idx).map(|v| v.as_slice());
         out.push_str(&render_tr(
             row,
             &table.columns,
             table.stub_col,
             row_idx,
             bg_row,
+            style_row,
         ));
     }
     out.push_str("  </tbody>\n");
@@ -537,6 +539,7 @@ fn render_tr(
     stub_col: Option<usize>,
     row_idx: usize,
     bg_row: Option<&[Option<String>]>,
+    style_row: Option<&[CellStyle]>,
 ) -> String {
     let mut out = String::new();
     out.push_str(&format!("    <tr style=\"{}\">", TR_STYLE));
@@ -545,6 +548,7 @@ fn render_tr(
     let stub_id = stub_col.map(|_| format!("stub_1_{}", row_idx + 1));
     for (i, (value, col)) in row.iter().zip(columns.iter()).enumerate() {
         let bg = bg_row.and_then(|r| r.get(i)).and_then(|o| o.as_deref());
+        let hl = style_row.and_then(|s| s.get(i));
         let cell = if Some(i) == stub_col {
             // Stub <th> in tbody. Alignment / numeric styling tracks the
             // column's resolved alignment (numeric stubs render right).
@@ -580,16 +584,43 @@ fn render_tr(
             if align.tabular_nums() {
                 style.push_str(" font-variant-numeric: tabular-nums;");
             }
-            let (style_with_bg, bgcolor_attr) = match bg {
+            // Merge SCALE background with HIGHLIGHT overrides. HIGHLIGHT
+            // background wins over SCALE; HIGHLIGHT color and face append
+            // their own declarations after any scale-derived foreground.
+            let hl_bg = hl.and_then(|h| h.background.as_deref());
+            let hl_color = hl.and_then(|h| h.color.as_deref());
+            let hl_face = hl.and_then(|h| h.face.as_deref());
+            let effective_bg = hl_bg.or(bg);
+            let (style_with_bg, bgcolor_attr) = match effective_bg {
                 Some(hex) => {
-                    let fg = crate::tabulate::scale::ideal_fg(hex);
-                    (
-                        format!("{} background-color: {}; color: {};", style, hex, fg),
-                        format!(" bgcolor=\"{}\"", hex),
-                    )
+                    let attr = format!(" bgcolor=\"{}\"", hex);
+                    if hl_bg.is_some() {
+                        // HIGHLIGHT background: do not synthesize a
+                        // foreground colour (gt's tab_style only sets
+                        // what was asked for).
+                        (format!("{} background-color: {};", style, hex), attr)
+                    } else {
+                        let fg = crate::tabulate::scale::ideal_fg(hex);
+                        (
+                            format!("{} background-color: {}; color: {};", style, hex, fg),
+                            attr,
+                        )
+                    }
                 }
                 None => (style, String::new()),
             };
+            let mut style_final = style_with_bg;
+            if let Some(c) = hl_color {
+                style_final.push_str(&format!(" color: {};", c));
+            }
+            if let Some(f) = hl_face {
+                let decl = match f.to_ascii_lowercase().as_str() {
+                    "italic" | "oblique" => format!("font-style: {};", f),
+                    _ => format!("font-weight: {};", f),
+                };
+                style_final.push(' ');
+                style_final.push_str(&decl);
+            }
             let headers = match &stub_id {
                 Some(sid) => format!("{} {}", sid, col.name),
                 None => col.name.clone(),
@@ -602,7 +633,7 @@ fn render_tr(
             format!(
                 "<td headers=\"{}\" class=\"gt_row {}\" style=\"{}\"{} \
                  valign=\"middle\" align=\"{}\">{}</td>",
-                headers, gt_class, style_with_bg, bgcolor_attr, align_str, cell_text
+                headers, gt_class, style_final, bgcolor_attr, align_str, cell_text
             )
         };
         if i == 0 {

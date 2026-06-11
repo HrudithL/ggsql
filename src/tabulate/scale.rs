@@ -36,6 +36,13 @@ fn parse_srgb(c: &str) -> Srgb<f32> {
     }
 }
 
+/// Parse any CSS colour string (named, `#rgb`, `#rrggbb`, `rgb(...)`)
+/// into the uppercase 6-digit hex form (`#RRGGBB`) gt uses in HTML
+/// output. Falls back to mid-grey on parse failure.
+pub fn parse_to_hex_upper(c: &str) -> String {
+    srgb_to_hex_upper(parse_srgb(c))
+}
+
 fn srgb_to_hex_upper(c: Srgb<f32>) -> String {
     let r = (c.red.clamp(0.0, 1.0) * 255.0).round() as u8;
     let g = (c.green.clamp(0.0, 1.0) * 255.0).round() as u8;

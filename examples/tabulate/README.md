@@ -8,9 +8,12 @@ and basic `{:num ...}` formatters), phase 3 (`FORMAT SPAN <cols> AS
 (`FORMAT <col> SETTING width / align`), phase 5 (the full
 `{:num <printf>}` and `{:time <strftime>}` formatter mini-language plus
 per-column `SETTING locale => '...'`), phase 6 (`RENAMING null|0|'literal'
-=> '<text>'` direct value substitution), and phase 7 (`SCALE background`
+=> '<text>'` direct value substitution), phase 7 (`SCALE background`
 continuous colour scales — named palettes, explicit colour stops,
-explicit `FROM (lo, hi)` domain, and `VIA log10` transform).
+explicit `FROM (lo, hi)` domain, and `VIA log10` transform), and
+phase 8 (`HIGHLIGHT <cols> FILTER <SQL predicate> SETTING ...` for
+predicate-driven cell-level highlights, including multiple HIGHLIGHTs
+in the same query).
 
 ## Run all examples
 
@@ -76,3 +79,6 @@ a browser:
 | [`29_scale_explicit_colors.ggsql`](29_scale_explicit_colors.ggsql) | `SCALE background TO ('<color>', '<color>')` — two-stop gradient in Lab space |
 | [`30_scale_explicit_domain.ggsql`](30_scale_explicit_domain.ggsql) | `SCALE background FROM (lo, hi) TO RdYlGn SETTING target => (col, col, …)` — fixed domain across several columns |
 | [`31_scale_log_transform.ggsql`](31_scale_log_transform.ggsql) | `SCALE background … VIA log10` — log-warped colour mapping for wide-range data |
+| [`32_highlight_failing_scores.ggsql`](32_highlight_failing_scores.ggsql) | `HIGHLIGHT score FILTER score < 60 SETTING face => 'bold', color => 'red'` — single-column conditional cell highlight |
+| [`33_highlight_region_row.ggsql`](33_highlight_region_row.ggsql) | `HIGHLIGHT revenue, units, margin FILTER region = 'West' SETTING background => '#fff3cd'` — multi-column highlight on rows matching a predicate |
+| [`34_highlight_up_down_days.ggsql`](34_highlight_up_down_days.ggsql) | Two `HIGHLIGHT` clauses (up-day green, down-day red) composed with currency formatting |

@@ -606,7 +606,40 @@ module.exports = grammar({
     ),
 
     // Sub-clauses allowed inside a TABULATE statement
-    tab_clause: $ => choice($.format_clause, $.label_clause, $.tab_scale_clause),
+    tab_clause: $ => choice(
+      $.format_clause,
+      $.label_clause,
+      $.tab_scale_clause,
+      $.tab_highlight_clause,
+    ),
+
+    // HIGHLIGHT <col> [, <col> ...]
+    //   FILTER <SQL predicate>
+    //   SETTING <key> => <value>, ...
+    //
+    // Multiple HIGHLIGHTs may appear per query; later clauses override
+    // earlier ones on conflict (matching gt's tab_style last-writer
+    // semantics). The FILTER expression reuses the same filter_expression
+    // rule that DRAW uses, so it is forwarded to the SQL backend verbatim.
+    tab_highlight_clause: $ => prec.right(seq(
+      caseInsensitive('HIGHLIGHT'),
+      $.identifier,
+      repeat(seq(',', $.identifier)),
+      $.filter_clause,
+      optional($.tab_highlight_setting)
+    )),
+
+    tab_highlight_setting: $ => seq(
+      caseInsensitive('SETTING'),
+      $.tab_highlight_pair,
+      repeat(seq(',', $.tab_highlight_pair))
+    ),
+
+    tab_highlight_pair: $ => seq(
+      field('key', $.identifier),
+      '=>',
+      field('value', choice($.string, $.number, $.boolean))
+    ),
 
     // SCALE <aesthetic> [FROM (min, max)] TO <palette>|(c1, c2, ...) [VIA <id>]
     //   SETTING target => <id>|(id, id, ...)
