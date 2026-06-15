@@ -836,6 +836,13 @@ fn render_tr(
                         // foreground colour (gt's tab_style only sets
                         // what was asked for).
                         (format!("{} background-color: {};", style, hex), attr)
+                    } else if hl_color.is_some() {
+                        // SCALE background present but a HIGHLIGHT will
+                        // override the text colour below; skip the
+                        // scale-derived `color:` declaration so the cell
+                        // ends up with a single `color:` value (matching
+                        // gt's rendered output).
+                        (format!("{} background-color: {};", style, hex), attr)
                     } else {
                         let fg = crate::tabulate::scale::ideal_fg(hex);
                         (

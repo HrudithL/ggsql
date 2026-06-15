@@ -1039,6 +1039,10 @@ struct FacetView {
     aggregates: Vec<String>,
     labels: Vec<String>,
     side: String,
+    /// Optional summary-cell format template (e.g. `'{:num %\'.2f}'`).
+    /// When set, summary values are rendered via this format instead of
+    /// the default `formatC(format="f", digits=K)` per-column max-K.
+    fmt: Option<String>,
 }
 
 impl FacetView {
@@ -1048,6 +1052,7 @@ impl FacetView {
             aggregates: Vec::new(),
             labels: Vec::new(),
             side: "bottom".to_string(),
+            fmt: None,
         };
         for s in settings {
             match s.key.to_ascii_lowercase().as_str() {
@@ -1083,6 +1088,12 @@ impl FacetView {
                         FacetValue::String(v) => v.clone(),
                         FacetValue::Identifier(v) => v.clone(),
                         _ => view.side,
+                    }
+                }
+                "fmt" => {
+                    view.fmt = match &s.value {
+                        FacetValue::String(v) => Some(v.clone()),
+                        _ => None,
                     }
                 }
                 _ => {}
@@ -1127,43 +1138,37 @@ fn compute_aggregate(values: &[f64], name: &str) -> Option<f64> {
     }
 }
 
-/// Format a summary-row aggregate value to match gt's
-/// `tab_summary_rows()` default rendering: integer-valued aggregates
-/// render without separators and without decimals (e.g. `107000`);
-/// fractional aggregates render with thousands separators and two
-/// decimals (e.g. `1,992.25`).
-fn format_summary_value(v: f64) -> String {
+/// Format a summary-row aggregate value to a fixed number of decimal
+/// places without thousands separators. gt's `tab_summary_rows()` default
+/// rendering picks a per-column decimal count equal to the maximum
+/// decimals needed by any value in that column (computed by
+/// [`per_column_summary_nsmall`]) and prints each value to that fixed
+/// width with `formatC(format = "f", digits = nsmall)`. Thousands
+/// separators are intentionally omitted; the captured fixture for
+/// example 34 has values up to 6,236 rendered as `6236.00`.
+fn format_summary_value(v: f64, nsmall: usize) -> String {
     if !v.is_finite() {
         return "NA".to_string();
     }
-    let is_int = (v - v.round()).abs() < 1e-9 * v.abs().max(1.0);
-    if is_int {
-        format!("{}", v.round() as i64)
-    } else {
-        format_with_thousands(v, 2)
-    }
+    format!("{:.*}", nsmall, v)
 }
 
-fn format_with_thousands(v: f64, dp: usize) -> String {
-    let s = format!("{:.*}", dp, v);
-    let (sign, rest) = if let Some(r) = s.strip_prefix('-') {
-        ("-", r)
-    } else {
-        ("", s.as_str())
-    };
-    let (int_part, frac_part) = match rest.find('.') {
-        Some(i) => (&rest[..i], &rest[i..]),
-        None => (rest, ""),
-    };
-    let mut out_rev = String::new();
-    for (i, ch) in int_part.chars().rev().enumerate() {
-        if i > 0 && i % 3 == 0 {
-            out_rev.push(',');
-        }
-        out_rev.push(ch);
+/// Number of decimals needed to losslessly print `v` at up to
+/// [`MAX_SUMMARY_DECIMALS`] places (R's default for `format()` /
+/// `formatC()` is 7 significant figures; we cap at 6 trailing decimals,
+/// which is more than enough for any summary value we have seen).
+fn summary_decimals_for(v: f64) -> usize {
+    const MAX: usize = 6;
+    if !v.is_finite() {
+        return 0;
     }
-    let int_with_seps: String = out_rev.chars().rev().collect();
-    format!("{}{}{}", sign, int_with_seps, frac_part)
+    for k in 0..=MAX {
+        let scaled = v * 10f64.powi(k as i32);
+        if (scaled - scaled.round()).abs() < 1e-6 * scaled.abs().max(1.0) {
+            return k;
+        }
+    }
+    MAX
 }
 
 /// Partition rows into [`RowGroup`]s using the FACET clause's group
@@ -1227,6 +1232,40 @@ fn build_row_groups(
         })
         .collect();
 
+    // gt's `tab_summary_rows()` default rendering formats every summary
+    // cell in a target column to the same number of decimal places: the
+    // maximum needed by any aggregate value in that column across all
+    // groups. Precompute that here so each row renders consistently.
+    let mut nsmall_by_col: HashMap<usize, usize> = HashMap::new();
+    for (col_idx, arr) in &target_data {
+        let mut max_nsmall = 0usize;
+        for group_name in &order {
+            let Some(rows) = row_indices_by.get(group_name) else {
+                continue;
+            };
+            let vals: Vec<f64> = rows
+                .iter()
+                .filter_map(|&r| numeric_to_f64(arr, r))
+                .collect();
+            for agg in &view.aggregates {
+                if let Some(v) = compute_aggregate(&vals, agg) {
+                    max_nsmall = max_nsmall.max(summary_decimals_for(v));
+                }
+            }
+        }
+        nsmall_by_col.insert(*col_idx, max_nsmall);
+    }
+
+    // When the FACET `SETTING fmt => '<template>'` is provided, build a
+    // numeric formatter from it and apply it to every summary cell
+    // (mirrors gt's `summary_rows(fmt = ~ fmt_number(...))`).
+    let summary_fmt: Option<crate::tabulate::format::NumFn> = view.fmt.as_deref().and_then(|t| {
+        crate::tabulate::format::build_format(t, None).and_then(|(f, _)| match f {
+            crate::tabulate::format::CellFmt::Numeric(nf) => Some(nf),
+            _ => None,
+        })
+    });
+
     order
         .into_iter()
         .map(|name| {
@@ -1255,11 +1294,14 @@ fn build_row_groups(
                             if !target_idxs.iter().any(|(_, i)| *i == col_idx) {
                                 return None; // non-target → em-dash
                             }
-                            values_by_col
-                                .get(&col_idx)
-                                .copied()
-                                .flatten()
-                                .map(format_summary_value)
+                            values_by_col.get(&col_idx).copied().flatten().map(|v| {
+                                if let Some(ref f) = summary_fmt {
+                                    f(Some(v))
+                                } else {
+                                    let nsmall = *nsmall_by_col.get(&col_idx).unwrap_or(&0);
+                                    format_summary_value(v, nsmall)
+                                }
+                            })
                         })
                         .collect();
 
@@ -1297,17 +1339,28 @@ fn read_parquet_schema(path: &Path) -> Result<Arc<Schema>> {
     Ok(builder.schema().clone())
 }
 
-/// Pick a DuckDB table name: prefer the TABULATE `FROM <source>`, then the
-/// SQL portion's first table reference.
+/// Pick a DuckDB table name to register the parquet view as. When the
+/// query has a SQL portion, use the first table referenced in its `FROM`
+/// (the actual underlying table — the TABULATE `FROM` clause may name a
+/// CTE that we'd never want to override). Otherwise use the TABULATE
+/// `FROM` clause, falling back to `__data__`.
 fn determine_table_name(source: &SourceTree<'_>, tab_stmt: &TabulateStmt) -> String {
+    if let Some(name) = tab_parser::extract_sql_from_table(source) {
+        return name;
+    }
     if let Some(ref s) = tab_stmt.from_source {
         return s.clone();
     }
-    tab_parser::extract_sql_from_table(source).unwrap_or_else(|| "__data__".to_string())
+    "__data__".to_string()
 }
 
 /// Build the SQL to execute. If there is a SQL portion, use it unchanged.
 /// Otherwise build `SELECT * FROM <source>`.
+///
+/// Special case: a SQL portion that ends in a bare `WITH … AS (…)` with no
+/// trailing `SELECT`/`FROM` body is treated as CTE definitions only, and we
+/// append `SELECT * FROM <table_name>` so DuckDB has something to execute.
+/// This lets a query say "define CTEs, then TABULATE … FROM <cte>".
 ///
 /// When the TABULATE statement contains `HIGHLIGHT … FILTER …` clauses, the
 /// returned SQL wraps the base query in a subquery and appends one boolean
@@ -1317,17 +1370,29 @@ fn determine_table_name(source: &SourceTree<'_>, tab_stmt: &TabulateStmt) -> Str
 fn build_sql(source: &SourceTree<'_>, tab_stmt: &TabulateStmt, table_name: &str) -> String {
     let root = source.root();
     let sql_nodes = source.find_nodes(&root, "(sql_portion) @s");
-    let base = if let Some(sql_node) = sql_nodes.into_iter().next() {
-        source
+    // (with_prefix, body): when the SQL portion is a CTE-only query, the
+    // body is the synthetic `SELECT * FROM <table>` we append; otherwise
+    // the body is the whole SQL portion and `with_prefix` is empty.
+    let (with_prefix, body) = if let Some(sql_node) = sql_nodes.into_iter().next() {
+        let text = source
             .get_text(&sql_node)
             .trim()
             .trim_end_matches(';')
-            .to_string()
+            .trim()
+            .to_string();
+        if sql_portion_is_cte_only(&sql_node) {
+            (text, format!("SELECT * FROM {}", table_name))
+        } else {
+            (String::new(), text)
+        }
     } else {
-        format!("SELECT * FROM {}", table_name)
+        (String::new(), format!("SELECT * FROM {}", table_name))
     };
     if tab_stmt.highlight_clauses.is_empty() {
-        return base;
+        if with_prefix.is_empty() {
+            return body;
+        }
+        return format!("{} {}", with_prefix, body);
     }
     let mut select = String::from("SELECT __t.*");
     for (i, hl) in tab_stmt.highlight_clauses.iter().enumerate() {
@@ -1336,8 +1401,31 @@ fn build_sql(source: &SourceTree<'_>, tab_stmt: &TabulateStmt, table_name: &str)
             hl.filter, HL_COL_PREFIX, i
         ));
     }
-    select.push_str(&format!(" FROM ({}) __t", base));
-    select
+    select.push_str(&format!(" FROM ({}) __t", body));
+    if with_prefix.is_empty() {
+        select
+    } else {
+        format!("{} {}", with_prefix, select)
+    }
+}
+
+/// True when the `sql_portion`'s last `sql_statement` is a `with_statement`
+/// that has no trailing `select_statement`/`from_statement` body — i.e. the
+/// user wrote only CTE definitions and expects TABULATE to drive the final
+/// SELECT.
+fn sql_portion_is_cte_only(sql_portion: &tree_sitter::Node<'_>) -> bool {
+    let last_stmt = (0..sql_portion.named_child_count())
+        .rev()
+        .filter_map(|i| sql_portion.named_child(i as u32))
+        .find(|n| n.kind() == "sql_statement");
+    let Some(stmt) = last_stmt else { return false };
+    let with = (0..stmt.named_child_count())
+        .filter_map(|i| stmt.named_child(i as u32))
+        .find(|n| n.kind() == "with_statement");
+    let Some(with) = with else { return false };
+    !(0..with.named_child_count())
+        .filter_map(|i| with.named_child(i as u32))
+        .any(|n| matches!(n.kind(), "select_statement" | "from_statement"))
 }
 
 /// Prefix for synthetic boolean projection columns added by `build_sql` when

@@ -6,4 +6,5 @@ FORMAT open, high, low, close
 FACET week
   SETTING target => (open, high, low, close),
           aggregate => ('min', 'max', 'mean'),
-          side => 'bottom'
+          side => 'bottom',
+          fmt => '{:num ,.2f}'
