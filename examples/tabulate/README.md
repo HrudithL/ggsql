@@ -57,7 +57,7 @@ a browser:
 | [`05_stub.ggsql`](05_stub.ggsql)           | `FORMAT STUB <col>` row-label column          |
 | [`06_title_subtitle.ggsql`](06_title_subtitle.ggsql) | `LABEL title => …, subtitle => …`   |
 | [`07_column_labels.ggsql`](07_column_labels.ggsql) | Per-column header relabel + `caption` source-note |
-| [`08_number_format.ggsql`](08_number_format.ggsql) | `RENAMING * => '{:num %\'d}'` thousands separator |
+| [`08_number_format.ggsql`](08_number_format.ggsql) | `RENAMING * => '{:num \'d}'` thousands separator |
 | [`09_full_header.ggsql`](09_full_header.ggsql) | All phase-2 features composed in one query |
 | [`10_spanner.ggsql`](10_spanner.ggsql)     | `FORMAT SPAN <cols> AS <id>` single spanner   |
 | [`11_two_spanners.ggsql`](11_two_spanners.ggsql) | Two side-by-side spanners + `LABEL <id> => …` |
@@ -67,15 +67,15 @@ a browser:
 | [`15_align_override.ggsql`](15_align_override.ggsql) | `SETTING align => …` overriding the auto-aligned default |
 | [`16_widths_with_spanner.ggsql`](16_widths_with_spanner.ggsql) | `SETTING width => …` composed with `FORMAT SPAN …` |
 | [`17_num_decimals.ggsql`](17_num_decimals.ggsql) | `{:num .3f}` — fixed decimal places |
-| [`18_num_thousands.ggsql`](18_num_thousands.ggsql) | `{:num ,d}` — integer with thousands separators |
-| [`19_currency.ggsql`](19_currency.ggsql) | `${:num ,d}` — literal currency prefix with separators |
+| [`18_num_thousands.ggsql`](18_num_thousands.ggsql) | `{:num \'d}` — integer with thousands separators |
+| [`19_currency.ggsql`](19_currency.ggsql) | `${:num \'d}` — literal currency prefix with separators |
 | [`20_percent.ggsql`](20_percent.ggsql) | `{:num .1f}%` — trailing `%` multiplies the value by 100 |
 | [`21_scientific.ggsql`](21_scientific.ggsql) | `{:num .2e}` — scientific notation with HTML `<sup>` exponent |
 | [`22_dates.ggsql`](22_dates.ggsql) | `{:time %B %-d, %Y}` — date formatting with strftime directives |
 | [`23_datetime.ggsql`](23_datetime.ggsql) | Mixed date / time / datetime columns with `{:time ...}` |
 | [`24_french_locale.ggsql`](24_french_locale.ggsql) | `SETTING locale => 'fr'` for French month and weekday names |
 | [`25_replace_missing.ggsql`](25_replace_missing.ggsql) | `RENAMING null => '<text>'` — substitute missing values (`---` becomes em-dash) |
-| [`26_replace_zero.ggsql`](26_replace_zero.ggsql) | `RENAMING 0 => '<text>'` — substitute zero cells, composed with `* => '{:num ,d}'` |
+| [`26_replace_zero.ggsql`](26_replace_zero.ggsql) | `RENAMING 0 => '<text>'` — substitute zero cells, composed with `* => '{:num \'d}'` |
 | [`27_direct_value_mapping.ggsql`](27_direct_value_mapping.ggsql) | `RENAMING '<value>' => '<text>'` — exact-value lookup table |
 | [`28_scale_named_palette.ggsql`](28_scale_named_palette.ggsql) | `SCALE background TO viridis` — colour cells along a named gt palette |
 | [`29_scale_explicit_colors.ggsql`](29_scale_explicit_colors.ggsql) | `SCALE background TO ('<color>', '<color>')` — two-stop gradient in Lab space |

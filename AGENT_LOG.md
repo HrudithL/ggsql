@@ -335,3 +335,26 @@ the deviation or `allowed_diff` justification.
   per-group summary, and multiple aggregates with custom labels; README
   intro and table updated; `examples/tabulate/out/index.html`
   regenerated via `bash examples/tabulate/run.sh`.
+
+## 2026-06-15 — printf body refactor (housekeeping on `main`)
+
+- Numeric formatter spec is now `{:num <body>}` where `<body>` is a bare
+  printf conversion (no leading `%`). The previous tolerated form
+  `{:num %<body>}` is rejected: `build_format` returns `None`, so the
+  RHS falls back to literal-string treatment.
+- Updated `src/tabulate/format.rs` (parser + new
+  `num_percent_introducer_is_rejected` test), all example queries that
+  used `%`, the `examples/tabulate/README.md` formatter-syntax column,
+  and the two fixture queries
+  (`tests/fixtures/05_header_source_note_caption_column_labels`,
+  `tests/fixtures/30_summary_rows_min_max_mean_with_labels`) that had
+  been written with `%`. No `expected.html`, CSS, or normalizer changes;
+  all 31 fixtures stay green.
+- Also fixed scientific notation rendering: when the decimal exponent
+  is 0 (i.e. `1 <= |x| < 10` or `x == 0`), `render_scientific_html` now
+  emits the mantissa alone instead of the noisy `× 10⁰` suffix
+  (`num_scientific_exp_zero_is_plain_mantissa` covers this).
+- Updated `TABULATE_PLAN.md` §2 (numeric formatter table + precedence
+  example) and §5 notes 1 and 9 to record the no-`%` rule and that
+  captured fixtures are aligned with it. This is a deliberate departure
+  from `/spec/GTSQL_PLAN.md`, which still writes printf bodies with `%`.

@@ -2,7 +2,7 @@ TABULATE date, open, high, low, close, volume, adj_close
 FROM sp500
 FORMAT STUB date
 FORMAT open, high, low, close
-  RENAMING * => '{:num %.2f}'
+  RENAMING * => '{:num .2f}'
 FACET week
   SETTING target => (open, high, low, close),
           aggregate => ('min', 'max', 'mean'),

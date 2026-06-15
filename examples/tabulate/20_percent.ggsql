@@ -17,6 +17,6 @@ SELECT
 TABULATE month, pizzas_sold, pct_of_annual
 FORMAT STUB month
 FORMAT pizzas_sold
-  RENAMING * => '{:num ,d}'
+  RENAMING * => '{:num \'d}'
 FORMAT pct_of_annual
   RENAMING * => '{:num .1f}%'

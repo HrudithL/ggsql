@@ -2,11 +2,10 @@
 //!
 //! Two mini-languages live inside a single-quoted RHS string:
 //!
-//! * `{:num <printf>}` — numeric formatter; current spec accepts a full
-//!   printf body (with `%` introducer). The captured fixtures pre-date this
-//!   change and use a legacy form without the `%` (e.g. `{:num ,d}`,
-//!   `{:num .3f}`, `{:num .2e}`); both forms are accepted so the fixtures
-//!   pass without re-capture.
+//! * `{:num <printf-body>}` — numeric formatter. The body is a printf
+//!   conversion specification *without* the leading `%` introducer (e.g.
+//!   `{:num \'d}`, `{:num .3f}`, `{:num .2e}`). A leading `%` is
+//!   rejected.
 //! * `{:time <strftime>}` — date / time formatter; strftime tokens are
 //!   gt-compatible: `%d`, `%I`, `%H`, `%M`, `%S` render unpadded to match
 //!   gt's named styles, matching the `%-d` / `%-I` GNU extensions used in
@@ -108,9 +107,12 @@ struct NumSpec {
 
 impl NumSpec {
     fn parse(body: &str) -> Option<Self> {
-        // Optional `%` introducer (current spec requires it; the legacy
-        // captures don't include it).
-        let mut s = body.strip_prefix('%').unwrap_or(body);
+        // The `%` printf introducer is intentionally rejected: specs are
+        // written without it (e.g. `{:num \'d}`, not `{:num %\'d}`).
+        if body.starts_with('%') {
+            return None;
+        }
+        let mut s = body;
         let mut thousands = false;
         let mut force_sign = false;
         // Flags loop. Stop on the first byte that is not a recognised flag.
@@ -234,28 +236,29 @@ fn insert_thousands(n: i64) -> String {
 ///   `<mantissa>&nbsp;×&nbsp;10<sup style="font-size: 65%;"><exp></sup>`
 /// with a Unicode minus sign on a negative exponent. The exponent is
 /// printed without leading zeroes and without a `+` for positives.
+///
+/// When the exponent is 0 (i.e. `1 <= |x| < 10`, or `x == 0`) the
+/// `× 10⁰` suffix carries no information, so we render the mantissa
+/// alone.
 fn render_scientific_html(x: f64, precision: usize) -> String {
     if x == 0.0 {
-        return format!(
-            "{:.*}&nbsp;×&nbsp;10<sup style=\"font-size: 65%;\">0</sup>",
-            precision, 0.0
-        );
+        return format!("{:.*}", precision, 0.0);
     }
     let abs = x.abs();
     let exp = abs.log10().floor() as i32;
     let mantissa = x / 10f64.powi(exp);
     let mantissa_s = format!("{:.*}", precision, mantissa);
-    if exp < 0 {
-        format!(
+    match exp.cmp(&0) {
+        std::cmp::Ordering::Equal => mantissa_s,
+        std::cmp::Ordering::Less => format!(
             "{}&nbsp;×&nbsp;10<sup style=\"font-size: 65%;\">\u{2212}{}</sup>",
             mantissa_s,
             exp.unsigned_abs()
-        )
-    } else {
-        format!(
+        ),
+        std::cmp::Ordering::Greater => format!(
             "{}&nbsp;×&nbsp;10<sup style=\"font-size: 65%;\">{}</sup>",
             mantissa_s, exp
-        )
+        ),
     }
 }
 
@@ -574,17 +577,13 @@ mod tests {
         assert_eq!(num("{:num .3f}", 5550.0), "5550.000");
     }
     #[test]
-    fn num_modern_decimals() {
-        assert_eq!(num("{:num %.3f}", 0.1111), "0.111");
-    }
-    #[test]
     fn num_legacy_thousands_int() {
         assert_eq!(num("{:num ,d}", 5550.0), "5,550");
         assert_eq!(num("{:num ,d}", 8_880_000.0), "8,880,000");
     }
     #[test]
-    fn num_modern_thousands_int() {
-        assert_eq!(num("{:num %'d}", 5550.0), "5,550");
+    fn num_thousands_apostrophe() {
+        assert_eq!(num("{:num 'd}", 5550.0), "5,550");
     }
     #[test]
     fn num_currency_prefix() {
@@ -600,8 +599,16 @@ mod tests {
     }
     #[test]
     fn num_forced_sign() {
-        assert_eq!(num("{:num %+.1f}%", 0.085), "+8.5%");
-        assert_eq!(num("{:num %+.1f}%", -0.085), "-8.5%");
+        assert_eq!(num("{:num +.1f}%", 0.085), "+8.5%");
+        assert_eq!(num("{:num +.1f}%", -0.085), "-8.5%");
+    }
+    #[test]
+    fn num_percent_introducer_is_rejected() {
+        // `{:num %...}` no longer parses; build_format returns None,
+        // so build_num_format / build_format both return None and the
+        // RHS is treated as plain text.
+        assert!(build_format("{:num %.2f}", None).is_none());
+        assert!(build_format("{:num %'d}", None).is_none());
     }
     #[test]
     fn num_scientific_html() {
@@ -609,6 +616,14 @@ mod tests {
         assert!(s.contains("<sup"), "got {}", s);
         assert!(s.contains("\u{2212}6"), "minus exponent: {}", s);
         assert!(s.starts_with("1.00&nbsp;"), "mantissa: {}", s);
+    }
+    #[test]
+    fn num_scientific_exp_zero_is_plain_mantissa() {
+        // 1 <= |x| < 10 ⇒ exponent is 0; emit the mantissa alone,
+        // not `× 10⁰`.
+        assert_eq!(num("{:num .2e}", 4.2), "4.20");
+        assert_eq!(num("{:num .2e}", 0.0), "0.00");
+        assert_eq!(num("{:num .2e}", -1.5), "-1.50");
     }
     #[test]
     fn time_english_date() {

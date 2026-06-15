@@ -1,6 +1,7 @@
--- Integer formatting with thousands separators: `,d` (or `'d`) inserts
--- the locale-appropriate group separator. Use `d` (no flag) for plain
--- integers without separators.
+-- Integer formatting with thousands separators: the `'` flag (printf
+-- locale-aware grouping) inserts the locale-appropriate group separator.
+-- Use `d` (no flag) for plain integers without separators.
+-- The `\'` is a backslash-escaped apostrophe inside a single-quoted string.
 SELECT
   'Acme'             AS company, 1200000 AS revenue, 1825 AS employees UNION ALL SELECT
   'Globex',                       980000,             1212               UNION ALL SELECT
@@ -9,4 +10,4 @@ SELECT
   'Stark Industries',           4800500,             5512
 TABULATE company, revenue, employees
 FORMAT revenue, employees
-  RENAMING * => '{:num ,d}'
+  RENAMING * => '{:num \'d}'

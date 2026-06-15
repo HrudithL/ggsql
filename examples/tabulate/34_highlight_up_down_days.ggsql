@@ -11,7 +11,7 @@ SELECT * FROM (VALUES
 ) AS ticks(date, open, close)
 TABULATE date, open, close
 FORMAT open, close
-  RENAMING * => '${:num %.2f}'
+  RENAMING * => '${:num .2f}'
 HIGHLIGHT date, open, close
   FILTER close > open
   SETTING background => '#90EE90', face => 'bold'

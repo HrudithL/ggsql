@@ -12,6 +12,6 @@ FORMAT company
   SETTING width => '200px'
 FORMAT revenue
   SETTING width => '120px', align => 'right'
-  RENAMING * => '{:num %\'d}'
+  RENAMING * => '{:num \'d}'
 FORMAT employees
   SETTING width => '100px', align => 'center'
