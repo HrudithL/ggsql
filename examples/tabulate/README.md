@@ -13,9 +13,12 @@ continuous colour scales — named palettes, explicit colour stops,
 explicit `FROM (lo, hi)` domain, and `VIA log10` transform), and
 phase 8 (`HIGHLIGHT <cols> FILTER <SQL predicate> SETTING ...` for
 predicate-driven cell-level highlights, including multiple HIGHLIGHTs
-in the same query), and phase 9 (`FACET <col>` for row grouping with
+in the same query), phase 9 (`FACET <col>` for row grouping with
 an optional `SETTING target / aggregate / label / side` block to emit
-per-group summary rows).
+per-group summary rows), and phase 10 (case-transform mini-language
+`{:Title}` / `{:UPPER}` / `{:lower}`, `FORMAT … SETTING units => '<u>'`
+in column headers, and the forced-sign acceptance test for
+`{:num +.Nf}%`).
 
 ## Run all examples
 
@@ -87,3 +90,7 @@ a browser:
 | [`35_facet_basic_grouping.ggsql`](35_facet_basic_grouping.ggsql) | `FACET category` — group body rows by a column with a heading row per group |
 | [`36_facet_summary_sum.ggsql`](36_facet_summary_sum.ggsql) | `FACET … SETTING target => (cols), aggregate => ('sum')` — one summary row per group |
 | [`37_facet_multi_aggregate.ggsql`](37_facet_multi_aggregate.ggsql) | Multiple aggregates (`min`, `max`, `mean`) with custom `label` overrides |
+| [`38_case_title.ggsql`](38_case_title.ggsql) | `RENAMING * => '{:Title}'` — title-case each cell (first letter of every word) |
+| [`39_case_upper_lower.ggsql`](39_case_upper_lower.ggsql) | `{:UPPER}` and `{:lower}` — normalise text to a single case |
+| [`40_units_in_header.ggsql`](40_units_in_header.ggsql) | `SETTING units => 'km^2'` — unit annotation in the column header (with `^N` superscript) |
+| [`41_forced_sign_growth.ggsql`](41_forced_sign_growth.ggsql) | `{:num +.1f}%` — forced-sign percent (positives `+`, negatives Unicode `−`) |

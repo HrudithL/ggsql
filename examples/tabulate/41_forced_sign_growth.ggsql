@@ -1,0 +1,15 @@
+-- `{:num +.1f}%` adds a `+` flag to the printf body: positives render
+-- with a leading `+`, negatives with a Unicode minus (`−`, U+2212) so
+-- positive and negative cells visually align. Pair with the trailing
+-- `%` literal to apply percent (×100) scaling. Mirrors gt's
+-- `fmt_percent(force_sign = TRUE)`.
+SELECT * FROM (VALUES
+  ('North',    0.045),
+  ('South',   -0.021),
+  ('East',     0.083),
+  ('West',    -0.067),
+  ('Central',  0.012)
+) AS growth(region, growth_rate)
+TABULATE region, growth_rate
+FORMAT growth_rate
+  RENAMING * => '{:num +.1f}%'

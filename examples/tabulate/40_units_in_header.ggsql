@@ -1,0 +1,20 @@
+-- `FORMAT <col> SETTING units => '<u>'` renders a unit annotation in the
+-- column header. The unit string uses `^N` for a superscript (e.g.
+-- `km^2` → `km²`). The column's display label is auto-derived from the
+-- column name by dropping the trailing `_<token>` suffix and
+-- title-casing the remaining `_`-separated words: `land_area_km2` →
+-- `Land Area`, `pop_density_2024` → `Pop Density`.
+SELECT * FROM (VALUES
+  ('Tokyo',     2194.07, 6168.7),
+  ('Osaka',      225.21, 12012.2),
+  ('Yokohama',   437.38, 8534.5),
+  ('Nagoya',     326.45, 7148.9)
+) AS cities(name, land_area_km2, pop_density_2024)
+TABULATE name, land_area_km2, pop_density_2024
+FORMAT STUB name
+FORMAT land_area_km2
+  SETTING units => 'km^2'
+  RENAMING * => '{:num ,.1f}'
+FORMAT pop_density_2024
+  SETTING units => 'people/km^2'
+  RENAMING * => '{:num ,d}'

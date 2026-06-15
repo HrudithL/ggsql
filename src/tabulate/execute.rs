@@ -108,6 +108,12 @@ pub struct ColMeta {
     /// only set by the scientific-notation formatter `{:num %.Ne}`) and
     /// must not be HTML-escaped by the renderer.
     pub raw_html: bool,
+    /// Units string from `FORMAT <col> SETTING units => '<u>'`. When
+    /// present, the column header renders `<derived-label> <units-html>`
+    /// where `units-html` wraps any `^N` segment in a gt-style
+    /// `<sup>` span. The derived label drops the column name's trailing
+    /// `_<tok>` suffix and title-cases the remaining `_`-separated words.
+    pub units: Option<String>,
 }
 
 /// Per-cell style overrides from `HIGHLIGHT` clauses.
@@ -399,6 +405,7 @@ fn build_table_ir(
     // Per-column width / align overrides from `FORMAT <col> SETTING ...`.
     let mut width_overrides: HashMap<String, String> = HashMap::new();
     let mut align_overrides: HashMap<String, ColAlign> = HashMap::new();
+    let mut units_overrides: HashMap<String, String> = HashMap::new();
     for fc in &tab_stmt.format_clauses {
         if fc.mode != FormatMode::None {
             continue;
@@ -422,6 +429,12 @@ fn build_table_ir(
                         for col in &fc.columns {
                             align_overrides.insert(col.to_ascii_lowercase(), a);
                         }
+                    }
+                }
+            } else if s.key.eq_ignore_ascii_case("units") {
+                if let SettingValue::String(v) = &s.value {
+                    for col in &fc.columns {
+                        units_overrides.insert(col.to_ascii_lowercase(), v.clone());
                     }
                 }
             }
@@ -449,6 +462,17 @@ fn build_table_ir(
             } else {
                 col_name.to_string()
             };
+            let units = units_overrides.get(&col_name.to_ascii_lowercase()).cloned();
+            // With `units` set and no explicit LABEL, derive a tidy header
+            // label from the column name (drop the trailing `_<tok>`
+            // suffix that typically encodes the units / year, then
+            // title-case the remaining `_`-separated words).
+            if units.is_some()
+                && !label_map.contains_key(&col_name.to_ascii_lowercase())
+                && !is_stub
+            {
+                label = derive_units_label(col_name);
+            }
             if let Some(s) = label_map.get(&col_name.to_ascii_lowercase()) {
                 label = s.clone();
             }
@@ -466,6 +490,7 @@ fn build_table_ir(
                 align,
                 width,
                 raw_html: false,
+                units,
             }
         })
         .collect();
@@ -493,6 +518,7 @@ fn build_table_ir(
                 align: ColAlign::Left,
                 width: None,
                 raw_html: false,
+                units: None,
             },
         );
         stub_col_idx = Some(0);
@@ -578,6 +604,7 @@ fn build_table_ir(
         Auto(Box<dyn Fn(Option<f64>) -> String>),
         Num(crate::tabulate::format::NumFn),
         Time(crate::tabulate::format::TimeFn),
+        Str(crate::tabulate::format::StringFn),
     }
     let mut formatters: HashMap<String, ColFmt> = HashMap::new();
     #[allow(clippy::needless_range_loop)]
@@ -604,6 +631,10 @@ fn build_table_ir(
                         // Date/time columns render right-aligned in gt.
                         columns[cm_idx].align = ColAlign::Right;
                         formatters.insert(name, ColFmt::Time(f));
+                        continue;
+                    }
+                    CellFmt::Str(f) => {
+                        formatters.insert(name, ColFmt::Str(f));
                         continue;
                     }
                 }
@@ -694,6 +725,21 @@ fn build_table_ir(
                                 // (`YYYY-MM-DD`, `HH:MM:SS`,
                                 // `YYYY-MM-DD HH:MM:SS`), then re-parse in
                                 // the time formatter.
+                                match arrow::util::display::array_value_to_string(col, row_idx) {
+                                    Ok(s) => f(Some(&s)),
+                                    Err(_) => format_cell(col, row_idx, None),
+                                }
+                            }
+                        }
+                        Some(ColFmt::Str(f)) => {
+                            if col.is_null(row_idx) {
+                                f(None)
+                            } else if let Some(sa) = col.as_any().downcast_ref::<StringArray>() {
+                                f(Some(sa.value(row_idx)))
+                            } else {
+                                // Non-string types (e.g. dictionary-encoded
+                                // strings) — fall back to Arrow's display
+                                // and pipe that through the transform.
                                 match arrow::util::display::array_value_to_string(col, row_idx) {
                                     Ok(s) => f(Some(&s)),
                                     Err(_) => format_cell(col, row_idx, None),
@@ -1297,6 +1343,56 @@ fn build_sql(source: &SourceTree<'_>, tab_stmt: &TabulateStmt, table_name: &str)
 /// Prefix for synthetic boolean projection columns added by `build_sql` when
 /// the query has `HIGHLIGHT` clauses.
 pub(crate) const HL_COL_PREFIX: &str = "__hl_";
+
+/// Derive a tidy display label for a column carrying a `SETTING units => ...`
+/// override. Drops the trailing `_<tok>` suffix (typically `_km2`,
+/// `_2021`, ...) and title-cases the remaining `_`-separated words.
+/// `density_2021` → `Density`; `land_area_km2` → `Land Area`.
+pub(crate) fn derive_units_label(col_name: &str) -> String {
+    let base = match col_name.rsplit_once('_') {
+        Some((head, _)) if !head.is_empty() => head,
+        _ => col_name,
+    };
+    base.split('_')
+        .map(|w| {
+            let mut chars = w.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Render a `SETTING units => '<s>'` value as gt-style HTML: a `^N`
+/// segment becomes a no-wrap `<span><sup>N</sup></span>` and the rest
+/// stays as literal text. Used as a suffix after the column's label in
+/// the rendered `<th>`.
+pub(crate) fn render_units_html(units: &str) -> String {
+    let mut out = String::with_capacity(units.len());
+    let bytes = units.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'^' {
+            let start = i + 1;
+            let mut j = start;
+            while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'-') {
+                j += 1;
+            }
+            if j > start {
+                out.push_str("<span style=\"white-space:nowrap;\"><sup style=\"line-height:0;\">");
+                out.push_str(&units[start..j]);
+                out.push_str("</sup></span>");
+                i = j;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
 
 /// Determine alignment for a column given the original Arrow schema (if
 /// available — e.g. when reading directly from parquet) and the actual data

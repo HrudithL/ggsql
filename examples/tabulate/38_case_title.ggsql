@@ -1,0 +1,12 @@
+-- `{:Title}` re-cases each cell to title case (first letter of every
+-- whitespace-separated word in upper case, the rest lower case). Useful
+-- when source text is screaming-snake / lower-snake / inconsistent.
+SELECT * FROM (VALUES
+  ('north america', 'ACME widgets',        12.40),
+  ('SOUTH america', 'globex international', 18.10),
+  ('europe',        'INITECH inc',          9.75),
+  ('Asia pacific',  'soylent CORP',        21.00)
+) AS sales(region, customer, revenue)
+TABULATE region, customer, revenue
+FORMAT region, customer
+  RENAMING * => '{:Title}'

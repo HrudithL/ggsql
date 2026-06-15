@@ -537,16 +537,25 @@ fn render_th(col: &ColMeta, is_stub: bool, rowspan: usize) -> String {
     } else {
         col.name.as_str()
     };
+    // Body of the <th>: `<label>` plus, when `SETTING units` is set on this
+    // column, a trailing `<units-html>` separated by a space.
+    let label_html = if is_stub {
+        html_escape(&col.label)
+    } else {
+        match &col.units {
+            Some(u) => format!(
+                "{} {}",
+                html_escape(&col.label),
+                crate::tabulate::execute::render_units_html(u),
+            ),
+            None => html_escape(&col.label),
+        }
+    };
     format!(
         "      <th class=\"gt_col_heading gt_columns_bottom_border {}\" \
          rowspan=\"{}\" colspan=\"1\" scope=\"col\" id=\"{}\" \
          style=\"{}\" bgcolor=\"#FFFFFF\" valign=\"bottom\" align=\"{}\">{}</th>\n",
-        gt_class,
-        rowspan,
-        id,
-        style,
-        align_str,
-        html_escape(&col.label)
+        gt_class, rowspan, id, style, align_str, label_html,
     )
 }
 
