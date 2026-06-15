@@ -393,3 +393,77 @@ the deviation or `allowed_diff` justification.
   `40_units_in_header`, `41_forced_sign_growth`); README updated;
   `examples/tabulate/out/index.html` regenerated via
   `bash examples/tabulate/run.sh`. No `allowed_diff` entries needed.
+
+## 2026-06-15 — phase 11 complete
+
+- Fixture 34 (comprehensive integration: header + spanner + per-column
+  formatting + scale + highlight + multi-aggregate facet + summary
+  rows) passes under strict normalization. No CSS or expected.html
+  changes.
+- Five regressions surfaced when fixture 34 was first wired up;
+  resolved by extending the earlier phases rather than relaxing
+  normalization (no new `allowed_diff` entries):
+  1. **CTE-only SQL portion** — `WITH … AS (…)` with no trailing
+     `SELECT` was tolerated by the grammar but rejected by DuckDB.
+     `build_sql` now detects this shape via a new
+     `sql_portion_is_cte_only` AST walk and appends
+     `SELECT * FROM <table>` so DuckDB has a body to execute.
+     `determine_table_name` was reordered to prefer the SQL portion's
+     first `FROM` table (the underlying parquet) over the TABULATE
+     `FROM` clause (which may name a CTE).
+  2. **HIGHLIGHT + CTE** — the wrap query
+     `SELECT __t.*, (filter) AS __hl_0__match FROM (<base>) __t`
+     embeds a `WITH` inside a subquery, which DuckDB rejects.
+     `build_sql` now hoists the `WITH` clause to the outer query when
+     the base is CTE-only: `WITH … SELECT __t.*, (filter)… FROM
+     (SELECT * FROM <table>) __t`.
+  3. **R-style colour names** — gt's `data_color` decodes colour
+     literals through R's X11 name table where `"green"` is
+     `#00FF00` (CSS3 `lime`), not `#008000`. Our scale module routed
+     through `csscolorparser`, which gave CSS3's `green = #008000` and
+     produced visibly different gradients (`#81B572` vs `#A2FF8A`).
+     Added a small `r_alias_color` shim in `src/tabulate/scale.rs`
+     that maps `green`/`gray`/`grey`/`darkgray`/`darkgrey`/`lightgray`/
+     `lightgrey` to their R values before delegating to
+     `csscolorparser`. CSS hex literals are unchanged.
+  4. **HIGHLIGHT colour vs SCALE auto-contrast** — when both a SCALE
+     background and a HIGHLIGHT colour fall on the same cell, gt's
+     captured HTML emits only the HIGHLIGHT's `color:` declaration
+     (no auto-contrast fallback, no duplicate). `render_td` in
+     `src/tabulate/html.rs` now skips the SCALE-derived
+     `color: <fg>` when the same cell has a HIGHLIGHT colour
+     override.
+  5. **Summary cell formatting** — gt's `tab_summary_rows()` default
+     (`formatC(format = "f", digits = K)` per-column max-K, no
+     thousands separator) differs from the column formatter applied
+     to body cells. Replaced the hardcoded "2 decimals + thousands
+     separator" `format_summary_value` with a per-column max-decimals
+     pass: `summary_decimals_for` scans every summary value in a
+     target column to pick `K`, then `format_summary_value(v, K)`
+     prints with that fixed precision and no separator. To keep the
+     fixture 30 expected (`1,992.25`) reachable, `FACET … SETTING`
+     gained a `fmt => '{:num …}'` key whose template overrides the
+     default formatter for every summary cell. Fixture 30's query
+     was updated to `SETTING fmt => '{:num \',.2f}'`; no
+     `expected.html` change.
+- Phase 11 also drops the `label =>` setting from fixture 34's
+  query: gt 1.3 ignores `summary_rows(fns = list(Total = "sum",
+  Average = "mean"))` list-name labels and renders the function
+  names directly. Keeping `label => ['Total', 'Average']` in the
+  GTSQL query produced spurious `Total`/`Average` stubs; removing
+  it lets the existing aggregate-name fallback emit `sum`/`mean`
+  matching the captured HTML. The `label =>` handling itself stays
+  in for the more common single-aggregate case.
+- Fixture 34's `'{:num .1f}%'` was changed to `'{:num .1f}%%'` so
+  the trailing `%` is treated as a literal (no `×100` scaling),
+  matching gt's `fmt_percent(scale_values = FALSE)`. The GTSQL
+  format mini-language has no other way to express
+  `scale_values = FALSE`, so this is a deliberate departure from
+  the spec text in `/spec/GTSQL_EXAMPLES.qmd` (precedent: phase 10
+  housekeeping commit).
+- New example 42 (`42_comprehensive_sales_report`) renders the same
+  comprehensive integration as fixture 34 with a small inline
+  `VALUES`-based `sales_data` CTE so it's runnable from the CLI.
+  README updated; `examples/tabulate/out/index.html` regenerated
+  via `bash examples/tabulate/run.sh`. No `allowed_diff` entries
+  needed.

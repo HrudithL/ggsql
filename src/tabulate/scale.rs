@@ -26,10 +26,35 @@ use palette::{FromColor, IntoColor, Lab, LinSrgb, Mix, Srgb};
 /// Out-of-domain / NA fill colour, matching `scales::col_numeric`'s default.
 pub const NA_COLOR: &str = "#808080";
 
-/// Parse a CSS colour name / hex into a linear-display `Srgb<f32>`. Falls
-/// back to mid-grey on parse failure so a typo'd palette doesn't crash the
-/// renderer.
+/// R / X11 colour names whose RGB values differ from CSS3. gt -> scales ->
+/// farver decodes these via the X11 table, so a SCALE clause written as
+/// e.g. `TO (white, green)` must produce `#00FF00`, not CSS's `#008000`.
+fn r_named_color_override(name: &str) -> Option<Srgb<f32>> {
+    // Lowercase, strip spaces (R is case-insensitive and ignores spaces).
+    let key: String = name.chars().filter(|c| !c.is_whitespace()).collect();
+    let key = key.to_ascii_lowercase();
+    let (r, g, b) = match key.as_str() {
+        "green" => (0u8, 255, 0),
+        "maroon" => (176, 48, 96),
+        "purple" => (160, 32, 240),
+        "gray" | "grey" => (190, 190, 190),
+        _ => return None,
+    };
+    Some(Srgb::new(
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+    ))
+}
+
+/// Parse a colour name / hex into a display `Srgb<f32>`. Recognises R / X11
+/// names that differ from CSS3 (`green`, `maroon`, `purple`, `gray`) before
+/// falling back to the CSS parser. Returns mid-grey on parse failure so a
+/// typo'd palette doesn't crash the renderer.
 fn parse_srgb(c: &str) -> Srgb<f32> {
+    if let Some(s) = r_named_color_override(c) {
+        return s;
+    }
     match csscolorparser::parse(c) {
         Ok(p) => Srgb::new(p.r, p.g, p.b),
         Err(_) => Srgb::new(0.5, 0.5, 0.5),

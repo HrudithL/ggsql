@@ -405,6 +405,20 @@ fn fixture_33_forced_sign_percent_growth_rates() {
     run_fixture("33_forced_sign_percent_growth_rates");
 }
 
+// ============================================================================
+// Phase 11 — integration. One query that composes header + spanner +
+// multi-aggregate facet + scale + highlight + summary + per-column
+// formatters. Pure regression test that earlier phases compose; no new
+// features.
+// ============================================================================
+
+#[test]
+fn fixture_34_comprehensive_sales_report() {
+    run_fixture(
+        "34_comprehensive_sales_report_with_header_spanner_formatting_scale_highlight_summary",
+    );
+}
+
 /// Render phase-1 fixtures to a viewable HTML page at
 /// `target/tabulate_demo.html`. Ignored by default; run with
 /// `cargo test --test tabulate_fixtures emit_demo -- --include-ignored --nocapture`.

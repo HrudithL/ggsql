@@ -18,12 +18,11 @@ FORMAT revenue
 FORMAT units
   RENAMING * => '{:num ,d}'
 FORMAT satisfaction
-  RENAMING * => '{:num .1f}%'
+  RENAMING * => '{:num .1f}%%'
 
 FACET region
   SETTING target => (revenue, units),
           aggregate => ('sum', 'mean'),
-          label => ['Total', 'Average'],
           side => 'bottom'
 
 SCALE background FROM (0, 1) TO ('white', 'green')

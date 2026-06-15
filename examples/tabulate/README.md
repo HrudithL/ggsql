@@ -18,7 +18,10 @@ an optional `SETTING target / aggregate / label / side` block to emit
 per-group summary rows), and phase 10 (case-transform mini-language
 `{:Title}` / `{:UPPER}` / `{:lower}`, `FORMAT … SETTING units => '<u>'`
 in column headers, and the forced-sign acceptance test for
-`{:num +.Nf}%`).
+`{:num +.Nf}%`), and phase 11 (an end-to-end integration example that
+exercises SQL CTE → header → spanner → per-column formats →
+`SCALE background` → `HIGHLIGHT … FILTER` → `FACET … SETTING fmt =>
+'<template>'` in a single query).
 
 ## Run all examples
 
@@ -94,3 +97,4 @@ a browser:
 | [`39_case_upper_lower.ggsql`](39_case_upper_lower.ggsql) | `{:UPPER}` and `{:lower}` — normalise text to a single case |
 | [`40_units_in_header.ggsql`](40_units_in_header.ggsql) | `SETTING units => 'km^2'` — unit annotation in the column header (with `^N` superscript) |
 | [`41_forced_sign_growth.ggsql`](41_forced_sign_growth.ggsql) | `{:num +.1f}%` — forced-sign percent (positives `+`, negatives Unicode `−`) |
+| [`42_comprehensive_report.ggsql`](42_comprehensive_report.ggsql) | Integration: SQL CTE → header + spanner + per-column formats + SCALE + HIGHLIGHT + FACET summary, end-to-end |
