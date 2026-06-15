@@ -1,0 +1,14 @@
+-- `{:UPPER}` and `{:lower}` force every character of a string cell to
+-- one case. Useful for normalising ticker symbols, country codes, or
+-- system identifiers that arrive in mixed case.
+SELECT * FROM (VALUES
+  ('aapl', 'United States', 195.42),
+  ('msft', 'United States', 412.10),
+  ('tsm',  'Taiwan',        148.85),
+  ('asml', 'Netherlands',   985.30)
+) AS holdings(ticker, country, price_usd)
+TABULATE ticker, country, price_usd
+FORMAT ticker
+  RENAMING * => '{:UPPER}'
+FORMAT country
+  RENAMING * => '{:lower}'

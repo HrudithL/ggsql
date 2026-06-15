@@ -11,6 +11,12 @@
 //!   gt's named styles, matching the `%-d` / `%-I` GNU extensions used in
 //!   the captured fixtures.
 //!
+//! Plus three string-only case transforms:
+//!
+//! * `{:Title}` — title-case (first letter of each word).
+//! * `{:UPPER}` — all upper-case.
+//! * `{:lower}` — all lower-case.
+//!
 //! Per-column locale (`FORMAT … SETTING locale => 'fr'`) selects month and
 //! weekday names. Only `en` (default) and `fr` are needed by the corpus.
 
@@ -20,6 +26,9 @@ use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 pub type NumFn = Box<dyn Fn(Option<f64>) -> String + Send + Sync>;
 /// Boxed time formatter (string cell value → rendered string).
 pub type TimeFn = Box<dyn Fn(Option<&str>) -> String + Send + Sync>;
+/// Boxed string formatter (string cell value → rendered string).
+/// Used by case transforms (`{:Title}`, `{:UPPER}`, `{:lower}`).
+pub type StringFn = Box<dyn Fn(Option<&str>) -> String + Send + Sync>;
 
 /// Formatter kind selected based on the RHS template.
 pub enum CellFmt {
@@ -27,6 +36,8 @@ pub enum CellFmt {
     Numeric(NumFn),
     /// Time formatter.
     Time(TimeFn),
+    /// String / case-transform formatter.
+    Str(StringFn),
 }
 
 /// Parse a `FORMAT ... RENAMING * => '<rhs>'` template into a `CellFmt`
@@ -40,7 +51,82 @@ pub fn build_format(rhs: &str, locale: Option<&str>) -> Option<(CellFmt, bool)> 
     if let Some(fmt) = build_time_format(rhs, locale) {
         return Some((CellFmt::Time(fmt), false));
     }
+    if let Some(fmt) = build_string_format(rhs) {
+        return Some((CellFmt::Str(fmt), false));
+    }
     None
+}
+
+// ============================================================================
+// String / case transforms: `{:Title}`, `{:UPPER}`, `{:lower}`, `{}`
+// with optional literal prefix / suffix.
+// ============================================================================
+
+fn build_string_format(rhs: &str) -> Option<StringFn> {
+    let open = rhs.find('{')?;
+    let after = &rhs[open + 1..];
+    let close = after.find('}')?;
+    let body = &after[..close];
+    let prefix = rhs[..open].to_string();
+    let suffix = rhs[open + 1 + close + 1..].to_string();
+
+    // Body is either empty (`{}`, identity) or `:<keyword>`. Numeric and
+    // time bodies are handled by their dedicated builders above and won't
+    // reach here.
+    let kind = match body {
+        "" => StringTransform::Identity,
+        ":Title" => StringTransform::Title,
+        ":UPPER" => StringTransform::Upper,
+        ":lower" => StringTransform::Lower,
+        _ => return None,
+    };
+
+    Some(Box::new(move |v: Option<&str>| -> String {
+        match v {
+            None => "NA".to_string(),
+            Some(s) => format!("{}{}{}", prefix, kind.apply(s), suffix),
+        }
+    }))
+}
+
+#[derive(Copy, Clone)]
+enum StringTransform {
+    Identity,
+    Title,
+    Upper,
+    Lower,
+}
+
+impl StringTransform {
+    fn apply(self, s: &str) -> String {
+        match self {
+            StringTransform::Identity => s.to_string(),
+            StringTransform::Upper => s.to_uppercase(),
+            StringTransform::Lower => s.to_lowercase(),
+            // Title-case the input the same way `tools::toTitleCase`
+            // does: lowercase everything, then upper-case the first
+            // character of every whitespace-separated word.
+            StringTransform::Title => {
+                let lower = s.to_lowercase();
+                let mut out = String::with_capacity(lower.len());
+                let mut at_word_start = true;
+                for c in lower.chars() {
+                    if c.is_whitespace() {
+                        out.push(c);
+                        at_word_start = true;
+                    } else if at_word_start {
+                        for u in c.to_uppercase() {
+                            out.push(u);
+                        }
+                        at_word_start = false;
+                    } else {
+                        out.push(c);
+                    }
+                }
+                out
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -171,7 +257,8 @@ impl NumSpec {
                 let n = x.round() as i64;
                 let abs = insert_thousands_opt(n.unsigned_abs() as i64, self.thousands);
                 match (n < 0, self.force_sign) {
-                    (true, _) => format!("-{}", abs),
+                    (true, true) => format!("\u{2212}{}", abs),
+                    (true, false) => format!("-{}", abs),
                     (false, true) => format!("+{}", abs),
                     (false, false) => abs,
                 }
@@ -190,7 +277,8 @@ impl NumSpec {
                     s
                 };
                 match (x.is_sign_negative() && x != 0.0, self.force_sign) {
-                    (true, _) => format!("-{}", body),
+                    (true, true) => format!("\u{2212}{}", body),
+                    (true, false) => format!("-{}", body),
                     (false, true) => format!("+{}", body),
                     (false, false) => body,
                 }
@@ -600,7 +688,15 @@ mod tests {
     #[test]
     fn num_forced_sign() {
         assert_eq!(num("{:num +.1f}%", 0.085), "+8.5%");
-        assert_eq!(num("{:num +.1f}%", -0.085), "-8.5%");
+        // With force_sign set, negatives use the Unicode minus (U+2212)
+        // to align visual width with `+` — mirrors gt's
+        // `fmt_percent(force_sign = TRUE)`.
+        assert_eq!(num("{:num +.1f}%", -0.085), "\u{2212}8.5%");
+    }
+    #[test]
+    fn num_unforced_negative_is_ascii_minus() {
+        // Without `+`, negatives keep the ASCII hyphen-minus.
+        assert_eq!(num("{:num .1f}", -1.5), "-1.5");
     }
     #[test]
     fn num_percent_introducer_is_rejected() {

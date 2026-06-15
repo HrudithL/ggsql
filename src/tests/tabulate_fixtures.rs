@@ -384,6 +384,27 @@ fn fixture_30_summary_rows_min_max_mean_with_labels() {
     run_fixture("30_summary_rows_min_max_mean_with_labels");
 }
 
+// ============================================================================
+// Phase 10 — case-transform mini-language (`{:Title}`, `{:UPPER}`, `{:lower}`),
+// `FORMAT … SETTING units => '<u>'` rendered in the column heading,
+// and the forced-sign acceptance test for `{:num +.Nf}%`.
+// ============================================================================
+
+#[test]
+fn fixture_31_title_case_transformation() {
+    run_fixture("31_title_case_transformation");
+}
+
+#[test]
+fn fixture_32_units_in_column_labels() {
+    run_fixture("32_units_in_column_labels");
+}
+
+#[test]
+fn fixture_33_forced_sign_percent_growth_rates() {
+    run_fixture("33_forced_sign_percent_growth_rates");
+}
+
 /// Render phase-1 fixtures to a viewable HTML page at
 /// `target/tabulate_demo.html`. Ignored by default; run with
 /// `cargo test --test tabulate_fixtures emit_demo -- --include-ignored --nocapture`.

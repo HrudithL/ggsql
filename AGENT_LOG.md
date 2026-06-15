@@ -358,3 +358,38 @@ the deviation or `allowed_diff` justification.
   example) and §5 notes 1 and 9 to record the no-`%` rule and that
   captured fixtures are aligned with it. This is a deliberate departure
   from `/spec/GTSQL_PLAN.md`, which still writes printf bodies with `%`.
+
+## 2026-06-15 — phase 10 complete
+
+- Fixtures 31 (title-case transformation), 32 (units in column labels),
+  and 33 (forced-sign percent / growth rates) pass under strict
+  normalization. No CSS or expected.html changes.
+- New `CellFmt::Str(StringFn)` variant in `src/tabulate/format.rs` for
+  case transforms. `build_format` now dispatches to a new
+  `build_string_format` that recognises `{:Title}`, `{:UPPER}`,
+  `{:lower}`, and the identity `{}`. Title-case follows R's
+  `tools::toTitleCase(tolower(x))` semantics: lowercase the input,
+  then upper-case the first character of every whitespace-separated
+  word. Strings are routed through `ColFmt::Str` in
+  `src/tabulate/execute.rs`; non-string Arrow types fall back to
+  `array_value_to_string` and pipe that through the transform.
+- New `units: Option<String>` on `ColMeta` populated from
+  `FORMAT <col> SETTING units => '<u>'`. When set and no explicit
+  `LABEL` overrides the column, the header label is derived from the
+  column name by dropping the trailing `_<tok>` suffix and
+  title-casing the remaining `_`-separated words
+  (`derive_units_label`: `land_area_km2` → `Land Area`,
+  `density_2021` → `Density`). The header `<th>` body becomes
+  `<label> <units-html>` where `render_units_html` wraps any `^N`
+  segment in gt's
+  `<span style="white-space:nowrap;"><sup style="line-height:0;">N</sup></span>`
+  markup.
+- `NumSpec::render` now emits Unicode minus (U+2212) for negatives
+  when `force_sign` is set, matching gt's
+  `fmt_*(force_sign = TRUE)` rendering. Unforced negatives stay on
+  the ASCII hyphen-minus (no change). Covered by
+  `num_forced_sign` and `num_unforced_negative_is_ascii_minus`.
+- New examples 38–41 (`38_case_title`, `39_case_upper_lower`,
+  `40_units_in_header`, `41_forced_sign_growth`); README updated;
+  `examples/tabulate/out/index.html` regenerated via
+  `bash examples/tabulate/run.sh`. No `allowed_diff` entries needed.
