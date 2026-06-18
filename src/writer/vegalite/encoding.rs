@@ -725,51 +725,40 @@ fn apply_label_mapping_to_encoding(
             _ => None,
         });
 
-    // Build the mapping and null_key based on legend style
-    let (filtered_mapping, null_key) = if is_binned_legend {
-        let legend_style = determine_legend_style(aesthetic, spec);
+    let is_symbol =
+        is_binned_legend && determine_legend_style(aesthetic, spec) == LegendStyle::Symbol;
 
-        if legend_style == LegendStyle::Symbol {
-            // Symbol legend: map VL's range-style labels to our labels
-            let closed = scale
-                .properties
-                .get("closed")
-                .and_then(|v| {
-                    if let ParameterValue::String(s) = v {
-                        Some(s.as_str())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or("left");
-
-            if let Some(ParameterValue::Array(breaks)) = scale.properties.get("breaks") {
-                let symbol_mapping =
-                    build_symbol_legend_label_mapping(breaks, label_mapping, closed);
-                (symbol_mapping, None)
-            } else {
-                (label_mapping.clone(), None)
-            }
-        } else {
-            // Gradient legend: use null_key for first terminal
-            let first_key = scale.properties.get("breaks").and_then(|b| {
-                if let ParameterValue::Array(breaks) = b {
-                    breaks.first().map(|e| e.to_key_string())
-                } else {
-                    None
-                }
-            });
-            (label_mapping.clone(), first_key)
-        }
-    } else {
-        (label_mapping.clone(), None)
+    let breaks = match scale.properties.get("breaks") {
+        Some(ParameterValue::Array(b)) => Some(b.as_slice()),
+        _ => None,
     };
+
+    // Symbol legends compare VL's predicted range labels (e.g. "-20 – 0")
+    // as strings via datum.label, not as numeric datum.value.
+    let filtered_mapping = if let (true, Some(breaks)) = (is_symbol, breaks) {
+        let closed = match scale.properties.get("closed") {
+            Some(ParameterValue::String(s)) => s.as_str(),
+            _ => "left",
+        };
+        build_symbol_legend_label_mapping(breaks, label_mapping, closed)
+    } else {
+        label_mapping.clone()
+    };
+
+    // Gradient legends use null for the first terminal's label
+    let null_key = if is_binned_legend && !is_symbol {
+        breaks.and_then(|b| b.first().map(|e| e.to_key_string()))
+    } else {
+        None
+    };
+
+    let effective_field_type = if is_symbol { "nominal" } else { field_type };
 
     let label_expr = build_label_expr(
         &filtered_mapping,
         time_format,
         null_key.as_deref(),
-        field_type,
+        effective_field_type,
     );
 
     if is_position_aesthetic(aesthetic) {
@@ -1212,6 +1201,35 @@ mod tests {
         assert!(
             !expr.contains("datum.label =="),
             "quantitative should not use datum.label for comparison, got: {expr}"
+        );
+    }
+
+    #[test]
+    fn test_symbol_legend_label_expr_uses_datum_label() {
+        use crate::plot::ArrayElement;
+
+        // Breaks: -20, 0, 20 → VL predicts labels "-20 – 0" and "≥ 0"
+        let breaks = vec![
+            ArrayElement::Number(-20.0),
+            ArrayElement::Number(0.0),
+            ArrayElement::Number(20.0),
+        ];
+        let mut label_mapping = HashMap::new();
+        label_mapping.insert("-20".to_string(), Some("cold".to_string()));
+        label_mapping.insert("0".to_string(), Some("hot".to_string()));
+
+        let symbol_mapping = build_symbol_legend_label_mapping(&breaks, &label_mapping, "left");
+
+        // The resulting mapping uses VL's range-style label strings as keys
+        let expr = build_label_expr(&symbol_mapping, None, None, "nominal");
+
+        assert!(
+            expr.contains("datum.label =="),
+            "symbol legend labelExpr must use datum.label (string comparison), got: {expr}"
+        );
+        assert!(
+            !expr.contains("datum.value =="),
+            "symbol legend labelExpr must not use datum.value (keys contain en-dashes), got: {expr}"
         );
     }
 
