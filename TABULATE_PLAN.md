@@ -195,10 +195,13 @@ Examples from the corpus (spec syntax):
 
 ##### Case transforms
 
+Formatter keywords inside `{:...}` are ASCII-case-insensitive (matching
+SQL keyword handling); the lowercase form is canonical.
+
 | Spec        | Means       | Fixture |
 | ----------- | ----------- | ------- |
-| `{:Title}`  | title case  | 31      |
-| `{:UPPER}`  | upper       | —       |
+| `{:title}`  | title case  | 31      |
+| `{:upper}`  | upper       | —       |
 | `{:lower}`  | lower       | —       |
 | `{}`        | as-is       | —       |
 

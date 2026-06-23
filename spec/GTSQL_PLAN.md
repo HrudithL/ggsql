@@ -217,9 +217,16 @@ FORMAT <column>, ...
 **Single-quote escape.** A RHS template is a single-quoted string. The only way to embed a literal `'` (apostrophe) inside that string is the escape `\'`. The SQL-standard doubled-quote form `''` is **not** accepted by the ggsql grammar. So a thousands-separated integer is written `'{:num %\'d}'`, currency with thousands separators and two decimals is `'${:num %\'.2f}'`, and `'Ontario\'s'` is the only spelling for a literal apostrophe inside a string.
 
 **Right-hand side (RHS) — string interpolation with formatters (ggsql-native):**
+
+All formatter keywords inside `{:...}` — `num`, `time`, `title`, `upper`,
+`lower` — are ASCII-case-insensitive, matching SQL keyword handling. The
+lowercase form is canonical and used throughout this document, but
+`{:NUM %.1f}`, `{:Title}`, `{:UPPER}`, and so on parse identically to
+their lowercase counterparts.
+
 - `'{}'` — insert value as-is
-- `'{:Title}'` — title-case
-- `'{:UPPER}'` — upper-case
+- `'{:title}'` — title-case
+- `'{:upper}'` — upper-case
 - `'{:lower}'` — lower-case
 - `'{:num <printf>}'` — numeric formatting; the body is a literal `printf` conversion spec, e.g., `%0.2f`, `%+.1f`, `%\'d`, `%.2e`
 - `'{:time <strftime>}'` — date/time formatting; the body is a literal `strftime` format string, e.g., `%B %Y`, `%H:%M`
@@ -266,7 +273,7 @@ FORMAT status
 
 -- Title-case a column
 FORMAT species
-  RENAMING * => '{:Title}'
+  RENAMING * => '{:title}'
 ```
 
 **gt mapping:**
