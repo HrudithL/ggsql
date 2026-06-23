@@ -1,4 +1,4 @@
--- `FORMAT <cols> RENAMING * => '{:num \'d}'` formats numbers with a
+-- `FORMAT <cols> RENAMING * => '{:num %\'d}'` formats numbers with a
 -- locale-aware thousands separator. The `\'` is a backslash-escaped
 -- apostrophe inside a single-quoted string.
 SELECT
@@ -9,4 +9,4 @@ SELECT
   'Stark Industries',           4800500,             5512
 TABULATE company, revenue, employees
 FORMAT revenue, employees
-  RENAMING * => '{:num \'d}'
+  RENAMING * => '{:num %\'d}'

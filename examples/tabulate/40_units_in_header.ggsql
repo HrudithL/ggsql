@@ -13,10 +13,10 @@ TABULATE name, land_area, pop_density
 FORMAT STUB name
 FORMAT land_area
   SETTING units => 'km^2'
-  RENAMING * => '{:num \'.1f}'
+  RENAMING * => '{:num %\'.1f}'
 FORMAT pop_density
   SETTING units => 'people/km^2'
-  RENAMING * => '{:num \'d}'
+  RENAMING * => '{:num %\'d}'
 LABEL
   land_area   => 'Land Area',
   pop_density => 'Pop Density'

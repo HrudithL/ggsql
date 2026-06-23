@@ -18,7 +18,7 @@ FORMAT company
   SETTING width => '180px'
 FORMAT rev_q1, rev_q2
   SETTING width => '110px'
-  RENAMING * => '${:num \'d}'
+  RENAMING * => '${:num %\'d}'
 FORMAT hc_q1, hc_q2
   SETTING width => '70px', align => 'center'
 FORMAT SPAN rev_q1, rev_q2 AS revenue

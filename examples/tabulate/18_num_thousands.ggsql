@@ -10,4 +10,4 @@ SELECT
   'Stark Industries',           4800500,             5512
 TABULATE company, revenue, employees
 FORMAT revenue, employees
-  RENAMING * => '{:num \'d}'
+  RENAMING * => '{:num %\'d}'

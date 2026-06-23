@@ -1,4 +1,4 @@
--- Literal prefix / suffix surrounds the `{:num ...}` template. A `$`
+-- Literal prefix / suffix surrounds the `{:num %...}` template. A `$`
 -- prefix yields currency-style output; mix and match with thousands
 -- separators for ledgers.
 SELECT
@@ -10,6 +10,6 @@ SELECT
 TABULATE model, year, hp, msrp
 FORMAT STUB model
 FORMAT hp
-  RENAMING * => '{:num \'d}'
+  RENAMING * => '{:num %\'d}'
 FORMAT msrp
-  RENAMING * => '${:num \'d}'
+  RENAMING * => '${:num %\'d}'

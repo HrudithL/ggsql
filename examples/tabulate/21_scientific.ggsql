@@ -1,4 +1,4 @@
--- Scientific notation: `{:num .Ne}` renders the mantissa with N decimals
+-- Scientific notation: `{:num %.Ne}` renders the mantissa with N decimals
 -- and emits an HTML `<sup>` exponent. The Unicode minus (U+2212) is used
 -- for negative exponents to match gt's typography.
 SELECT
@@ -8,4 +8,4 @@ SELECT
   4.2,                   12.0
 TABULATE small, large
 FORMAT small, large
-  RENAMING * => '{:num .2e}'
+  RENAMING * => '{:num %.2e}'

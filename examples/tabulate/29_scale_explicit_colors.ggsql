@@ -12,6 +12,6 @@ SELECT company, margin * 100 AS margin FROM (
 ) AS firms(company, margin)
 TABULATE company, margin
 FORMAT margin
-  RENAMING * => '{:num .1f}%'
+  RENAMING * => '{:num %.1f}%'
 SCALE background TO ('white', 'darkgreen')
   SETTING target => margin
