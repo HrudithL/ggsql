@@ -33,6 +33,9 @@ A query is `SELECT ... TABULATE ... <clauses>*`. The SQL preamble is
 optional when `FROM` is given inside `TABULATE`. Six clauses can follow
 `TABULATE`, each in any order:
 
+- **VISUALISE and TABULATE are mutually exclusive in a single query.**
+  The parser rejects any query containing both.
+
 | Clause       | Repeatable | Subclauses               |
 | ------------ | ---------- | ------------------------ |
 | `FORMAT`     | yes        | `SETTING`, `RENAMING`    |

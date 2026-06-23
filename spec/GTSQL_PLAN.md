@@ -705,12 +705,20 @@ LABEL
 
 ---
 
+## Interaction with VISUALISE
+
+A single query may contain either `VISUALISE` clauses **or** `TABULATE`
+clauses, never both. Mixing them is a parse-time error. Use a separate
+query for each output mode.
+
+---
+
 ## Open Questions
 
 1. **Keyword choice**: `TABULATE` vs `TABLE` vs `PRESENT`? (`TABULATE` avoids conflict with SQL `TABLE` keyword and is more distinctive.)
 Answer: TABULATE is okay.
 2. **Interplay with VISUALISE**: Can a query have both `VISUALISE` and `TABULATE`? Likely no — they are mutually exclusive output modes.
-Answer: we haven't thought about what the host application will do. I assume it should be fine.
+Answer: No. A single query contains either `VISUALISE` or `TABULATE`, never both. Mixing them is rejected by the parser. See “Interaction with VISUALISE” above.
 3. **Column aliasing**: Should `AS` in `TABULATE` set both the source mapping and the display label, or only the label? (Proposed: sets the display label, i.e., maps to `cols_label()`.)
 Answer: the label is an attribute of a column name, we should keep 'AS' for changing the column names proper.
 4. **FORMAT wildcard**: `FORMAT *` with `RENAMING` — does it apply to all columns, or only type-compatible columns? (Proposed: only compatible columns, matching gt's behavior.)
