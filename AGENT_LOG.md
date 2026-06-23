@@ -467,3 +467,58 @@ the deviation or `allowed_diff` justification.
   README updated; `examples/tabulate/out/index.html` regenerated
   via `bash examples/tabulate/run.sh`. No `allowed_diff` entries
   needed.
+
+## 2026-06-23 — phase 12 (housekeeping on `agent/tabulate-phase-12`)
+
+Cleanup pass on the `FORMAT … RENAMING` mini-language and on the
+single-quoted string escape, driven by user requests. Each change
+narrows the surface area so the language has one obvious spelling for
+each concept.
+
+- **Auto-derived units label removed.** `FORMAT <col> SETTING units =>
+  '<u>'` no longer rewrites the column header by stripping a trailing
+  `_<token>` suffix and title-casing the remainder. The header is now
+  the column name (or whatever the user supplies via `LABEL <col> =>
+  '<text>'`) with the unit annotation appended. `derive_units_label`
+  was deleted from `src/tabulate/execute.rs`. Fixture 32 was updated
+  with explicit `LABEL` clauses (`land_area_km2 => 'Land Area'`,
+  `density_2021 => 'Density'`) so its `expected.html` still matches;
+  example 40 was rewritten end-to-end to demonstrate the supported
+  pattern.
+- **SQL `''` doubled-quote escape removed.** The grammar's `string`
+  rule (`tree-sitter-ggsql/grammar.js`) and `unquote_string` in
+  `src/parser/tabulate.rs` no longer treat `''` as a single
+  embedded `'`. The only escape for an embedded apostrophe is `\'`.
+  Fixture 05 was the only fixture using `''` (in
+  `'Ontario''s Largest Municipalities'` and `'{:num ''d}'`); both
+  now use `\'`. `parse_string_node` in `src/parser/builder.rs` never
+  recognised `''` in the first place, so VISUALISE-side strings are
+  unaffected.
+- **`{:title}` / `{:upper}` / `{:lower}` are case-insensitive.**
+  `build_string_format` in `src/tabulate/format.rs` strips the leading
+  colon and lowercases the keyword before matching, so `{:title}`,
+  `{:Title}`, `{:TITLE}` are equivalent. Examples 38 and 39 were
+  rewritten to use the lowercase form; the README's case-transform row
+  follows suit. Existing fixture 31 (which uses `{:Title}`) still
+  passes — case-insensitivity is purely additive.
+- **`{:num}` thousands flag is `'` only.** `NumSpec::parse` no longer
+  accepts `,` as a thousands flag; only `'` (written `\'` inside the
+  single-quoted RHS) works. 10 fixture queries that previously used
+  `,d` / `,.Nf` were rewritten to `\'d` / `\'.Nf`. The format-rs unit
+  tests `num_legacy_thousands_int` / `num_currency_prefix` were
+  retargeted to the apostrophe form.
+- **Percent suffix is literal — no `×100` scaling, no `%%` collapse.**
+  `parse_percent_suffix` was deleted from `src/tabulate/format.rs`.
+  `build_num_format` now appends the post-`{...}` text verbatim. A
+  trailing `%` is just a character; users who hold 0–1 proportions and
+  want `xx.x%` output must multiply by 100 in the upstream SQL
+  projection. The doc comment at the top of `format.rs` spells out the
+  new model. Fixtures 14 and 33 (which relied on the implicit scaling)
+  now multiply by 100 in `SELECT … * 100 AS …`; fixture 34's
+  `{:num .1f}%%` becomes `{:num .1f}%` (same rendering). Examples 20,
+  29, 41, and 42 were updated analogously — example 42's `satisfaction`
+  column was re-scaled to 0–100 integers in the `VALUES` block, with
+  `SCALE FROM (0, 100)` and `HIGHLIGHT FILTER < 70` adjusted to match.
+- Phase merged via four logical commits on
+  `agent/tabulate-phase-12`. Examples regenerated via
+  `bash examples/tabulate/run.sh`. No `allowed_diff` entries needed.
