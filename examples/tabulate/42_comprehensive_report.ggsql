@@ -40,7 +40,7 @@ FORMAT satisfaction
 
 FACET region
   SETTING target    => (revenue, units),
-          aggregate => ('sum', 'mean'),
+          aggregate => ('sum', 'avg'),
           side      => 'bottom'
 
 SCALE background FROM (0, 100) TO ('white', 'green')

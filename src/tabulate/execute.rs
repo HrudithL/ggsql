@@ -1089,7 +1089,7 @@ fn compute_aggregate(values: &[f64], name: &str) -> Option<f64> {
         "sum" => Some(values.iter().sum()),
         "min" => values.iter().copied().reduce(f64::min),
         "max" => values.iter().copied().reduce(f64::max),
-        "mean" | "avg" | "average" => Some(values.iter().sum::<f64>() / n),
+        "avg" => Some(values.iter().sum::<f64>() / n),
         "median" => {
             let mut v: Vec<f64> = values.to_vec();
             v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));

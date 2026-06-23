@@ -626,5 +626,26 @@ fn parse_facet_pair(source: &SourceTree<'_>, node: &tree_sitter::Node<'_>) -> Re
             )))
         }
     };
+
+    // Validate aggregate function names: 'mean' / 'average' are no longer
+    // accepted (use 'avg', the SQL-canonical spelling).
+    if key.eq_ignore_ascii_case("aggregate") {
+        let names: Vec<&str> = match &parsed {
+            FacetValue::String(v) => vec![v.as_str()],
+            FacetValue::Identifier(v) => vec![v.as_str()],
+            FacetValue::StrList(v) => v.iter().map(|s| s.as_str()).collect(),
+            FacetValue::IdentList(v) => v.iter().map(|s| s.as_str()).collect(),
+            _ => Vec::new(),
+        };
+        for n in names {
+            let lc = n.to_ascii_lowercase();
+            if lc == "mean" || lc == "average" {
+                return Err(GgsqlError::ParseError(format!(
+                    "FACET aggregate '{}' is not accepted; use 'avg' instead",
+                    n,
+                )));
+            }
+        }
+    }
     Ok(FacetSetting { key, value: parsed })
 }
