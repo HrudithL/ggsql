@@ -237,6 +237,9 @@ SCALE <aesthetic> [FROM (<min>, <max>)] TO (<v1>, <v2>) | TO <palette> [VIA <tra
 - `target` is required. Single column or list.
 - `FILTER` is optional row-restriction using the same SQL-like expression
   language as `HIGHLIGHT ... FILTER`.
+- **Conflict resolution.** When two `SCALE` clauses (or a `SCALE` and a
+  `HIGHLIGHT`) write the same CSS property on the same cell, the clause
+  appearing later in the query wins.
 
 ### 2.5 `HIGHLIGHT`
 
@@ -250,6 +253,9 @@ HIGHLIGHT <col> [, <col>...]
 - Multiple `HIGHLIGHT`s per query (fixture 28: up-day and down-day).
 - `SETTING` style keys: `face`, `color`, `background`, `size`, `transform`,
   `decoration`.
+- **Conflict resolution.** When two `HIGHLIGHT`s (or a `HIGHLIGHT` and a
+  `SCALE`) write the same CSS property on the same cell, the clause
+  appearing later in the query wins.
 
 ### 2.6 `LABEL`
 

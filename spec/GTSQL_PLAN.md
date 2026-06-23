@@ -460,6 +460,11 @@ SCALE <aesthetic> [FROM (<min>, <max>)] TO (<val1>, <val2>) [VIA <transform>]
 - `SETTING target => <column>` or `SETTING target => (<col1>, <col2>, ...)` — which column(s) to apply the scale to (**required**). Accepts a single column name or a parenthesized list of columns. When multiple columns are listed, the same scale is applied independently to each column (each column's values are mapped through the same domain→range). In `VISUALISE`, the aesthetic target is implicit via `DRAW ... col AS fill`; in `TABULATE` there is no aesthetic binding syntax, so `target` explicitly names the column(s) whose values drive the scale and receive the styled output
 - `FILTER <condition>` — **optional** row selection; only rows matching the condition receive the scaled styling (maps to gt’s `data_color(rows = ...)` / `tab_style(locations = cells_body(rows = ...))`) . Uses the same SQL-like expressions as `HIGHLIGHT ... FILTER`
 
+**Conflict resolution.** When two `SCALE` clauses, or a `SCALE` and a
+`HIGHLIGHT` (or two `HIGHLIGHT`s), write the same CSS property on the
+same cell, the clause appearing **later in the query wins** — the
+later style overrides the earlier per-property.
+
 **Examples:**
 ```sql
 -- Color scale with explicit domain
@@ -527,6 +532,11 @@ HIGHLIGHT <column>, ...
 - `decoration => 'underline'/'line-through'/'overline'` — text decoration
 
 The `FILTER` subclause uses SQL-like condition expressions.
+
+**Conflict resolution.** When two `HIGHLIGHT` clauses (or a `HIGHLIGHT`
+and a `SCALE`) write the same CSS property on the same cell, the
+clause appearing **later in the query wins** — the later style overrides
+the earlier per-property.
 
 **Example:**
 ```sql
