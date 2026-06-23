@@ -1,4 +1,4 @@
--- `{:num <printf>}` is the cell formatter mini-language. `.3f` fixes the
+-- `{:num %<printf>}` is the cell formatter mini-language. `.3f` fixes the
 -- output to three digits after the decimal point.
 SELECT
   'alpha'  AS region, 0.1111 AS share UNION ALL SELECT
@@ -8,4 +8,4 @@ SELECT
   'epsilon',          5550.0
 TABULATE region, share
 FORMAT share
-  RENAMING * => '{:num .3f}'
+  RENAMING * => '{:num %.3f}'

@@ -12,6 +12,6 @@ SELECT
   'India',                      1407563842
 TABULATE country, population
 FORMAT population
-  RENAMING * => '{:num \'d}'
+  RENAMING * => '{:num %\'d}'
 SCALE background FROM (0, 2000000000) TO ('white', 'darkblue') VIA log10
   SETTING target => population

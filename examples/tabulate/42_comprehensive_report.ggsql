@@ -32,11 +32,11 @@ FORMAT STUB quarter
 FORMAT SPAN revenue, units AS financial
 
 FORMAT revenue
-  RENAMING * => '${:num \'.1f}'
+  RENAMING * => '${:num %\'.1f}'
 FORMAT units
-  RENAMING * => '{:num \'d}'
+  RENAMING * => '{:num %\'d}'
 FORMAT satisfaction
-  RENAMING * => '{:num d}%'
+  RENAMING * => '{:num %d}%'
 
 FACET region
   SETTING target    => (revenue, units),

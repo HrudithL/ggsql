@@ -98,3 +98,4 @@ a browser:
 | [`40_units_in_header.ggsql`](40_units_in_header.ggsql) | `SETTING units => 'km^2'` — unit annotation in the column header (with `^N` superscript) |
 | [`41_forced_sign_growth.ggsql`](41_forced_sign_growth.ggsql) | `{:num +.1f}%` — forced-sign percent (positives `+`, negatives Unicode `−`) |
 | [`42_comprehensive_report.ggsql`](42_comprehensive_report.ggsql) | Integration: SQL CTE → header + spanner + per-column formats + SCALE + HIGHLIGHT + FACET summary, end-to-end |
+| [`43_raw_passthrough.ggsql`](43_raw_passthrough.ggsql) | `RENAMING * => '${} USD'` — raw `{}` passthrough with literal prefix/suffix; no formatter applied |

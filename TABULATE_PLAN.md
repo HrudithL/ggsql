@@ -17,13 +17,8 @@ Read in this order:
 
 > **Fixture freshness.** The captured fixtures in `tests/fixtures/` were
 > generated from an earlier spec revision. Their `{:num ...}` and
-> `{:time ...}` bodies match this repo's canonical syntax — see §2 and
-> §5 note 1 — and do not need re-capturing.
-
-> **Printf body has no `%` introducer in this repo.** The upstream spec
-> shows printf bodies with a leading `%` (e.g. `{:num %'d}`); this
-> implementation rejects that form and accepts only the bare conversion
-> spec (`{:num 'd}`, `{:num .3f}`, `{:num +.1f}`). See §5 note 1.
+> `{:time ...}` bodies were swept to use the canonical `%` introducer
+> in the Phase 2 polishing pass — see §2.2 and §5 note 1.
 
 ---
 
@@ -128,7 +123,7 @@ FORMAT [SPAN | STUB] <col> [, <col>...] [AS <id>]
 | `'literal'`  | exact value match                      | `text_transform()`|
 
 Precedence (highest first): literal > `null` > `0` > `*`. So
-`RENAMING * => '{:num \'d}', 30 => 'Thirty'` formats everything but `30` as
+`RENAMING * => '{:num %\'d}', 30 => 'Thirty'` formats everything but `30` as
 an integer, and `30` becomes the literal string.
 
 #### `FORMAT ... RENAMING` RHS — string interpolation
@@ -140,20 +135,22 @@ a literal prefix/suffix. The two formatter mini-languages are
 ##### Numeric formatter `{:num <printf-body>}`
 
 The body after `{:num ` is a `printf(3)` conversion specification
-**without** the leading `%` (the implementation rejects a `%`
-introducer; the surrounding `{:num ...}` already plays that role).
+*with* the leading `%` introducer (e.g. `{:num %\'d}`, `{:num %.3f}`).
+The surrounding `{:num ...}` is the formatter selector; the printf
+`%` is the conversion introducer inside it.
+
 Examples used in the fixtures and examples corpus:
 
-| Spec              | Means                                | Example call            |
-| ----------------- | ------------------------------------ | ----------------------- |
-| `{:num .3f}`      | 3 decimal places                     | `fmt_number`            |
-| `{:num 'd}`       | integer with thousands separators    | `fmt_integer`           |
-| `{:num '.2f}`     | float, 2 decimals, thousands seps    | `fmt_number(use_seps)`  |
-| `{:num '.1f}`     | float, 1 decimal, thousands seps     | `fmt_number(use_seps)`  |
-| `{:num .1f}%`     | percent, 1 decimal                   | `fmt_percent`           |
-| `{:num .2e}`      | scientific notation, 2 decimals      | `fmt_scientific`        |
-| `{:num +.1f}%`    | percent, forced sign, 1 decimal      | `fmt_percent(force_sign)`|
-| `${:num '.2f}`    | currency — literal `$` prefix        | `fmt_currency("USD")`   |
+| Spec               | Means                                | Example call             |
+| ------------------ | ------------------------------------ | ------------------------ |
+| `{:num %.3f}`      | 3 decimal places                     | `fmt_number`             |
+| `{:num %\'d}`      | integer with thousands separators    | `fmt_integer`            |
+| `{:num %\'.2f}`    | float, 2 decimals, thousands seps    | `fmt_number(use_seps)`   |
+| `{:num %\'.1f}`    | float, 1 decimal, thousands seps     | `fmt_number(use_seps)`   |
+| `{:num %.1f}%`     | float with literal `%` suffix        | `fmt_number` + `%` text  |
+| `{:num %.2e}`      | scientific notation, 2 decimals      | `fmt_scientific`         |
+| `{:num %+.1f}%`    | forced sign, 1 decimal, `%` suffix   | `fmt_number(force_sign)` |
+| `${:num %\'.2f}`   | currency — literal `$` prefix        | `fmt_currency("USD")`    |
 
 Flags supported: `'` (locale-aware thousands separator), `+` (forced
 sign), `0` (zero pad). Conversions supported: `d` (integer), `f` (fixed
@@ -428,15 +425,17 @@ These are decisions baked in once so per-phase work does not rediscover
 them. The spec is authoritative for syntax; these notes capture
 implementation choices the spec does not pin down.
 
-1. **Printf body is a bare conversion spec.** Parse `{:num <spec>}` as
-   printf **without** the `%` introducer; recognized flags `'` `+` `0`;
-   conversions `d` `f` `e`. Reject specs that begin with `%` — the
-   surrounding `{:num ...}` is the introducer. Match `gt::fmt_*()` defaults
-   (e.g. `'${:num \'.2f}'` == `fmt_currency(currency = "USD")`). This
-   diverges from the upstream spec, which still shows `%` in printf bodies.
-2. **Percent suffix outside the `{...}` scales by 100.** `'{:num .1f}%'`
-   on `0.085` renders `8.5%`. Don't double-scale if the user writes
-   `'{:num .1f}%%'` — a literal `%%` should not trigger scaling.
+1. **Printf body is a full printf conversion spec.** Parse `{:num %<spec>}`
+   as printf **with** the `%` introducer; recognized flags `'` `+` `0`
+   `-` ` ` `#`; conversions `d` `f` `e`. Reject specs that omit the `%`
+   — the surrounding `{:num ...}` is the formatter selector, not the
+   introducer. Match `gt::fmt_*()` defaults (e.g. `'${:num %\'.2f}'` ==
+   `fmt_currency(currency = "USD")`).
+2. **Percent suffix outside the `{...}` is a literal character.** No
+   `×100` scaling, no `%%` collapse. A column of 0–1 proportions that
+   should render as `xx.x%` must be multiplied by 100 in the upstream
+   SQL (see `examples/tabulate/20_percent.ggsql` and
+   `41_forced_sign_growth.ggsql`).
 3. **strftime in `{:time ...}` is gt-compatible, not strict strftime.** In
    particular `%d` and `%I` render unpadded to match gt's named styles
    (`date_style`, `time_style`). See §2.2 “Implementation note
@@ -452,9 +451,10 @@ implementation choices the spec does not pin down.
    VISUALISE palette catalogue (spec open-question 7). Spec examples 22
    and 24 require this in phase 7.
 8. **Captured fixtures use this repo's canonical syntax.** Every
-   `tests/fixtures/*/query.ggsql` uses the bare `{:num <body>}` form
-   (no `%`) and gt-compatible strftime (`%d`, `%I`). No re-capture is
-   needed when starting phases that touch the formatter mini-language.
+   `tests/fixtures/*/query.ggsql` uses the `{:num %<body>}` form (with
+   the `%` introducer, swept in the Phase 2 polishing pass) and
+   gt-compatible strftime (`%d`, `%I`). No re-capture is needed when
+   starting phases that touch the formatter mini-language.
 
 ---
 

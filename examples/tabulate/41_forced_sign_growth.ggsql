@@ -1,4 +1,4 @@
--- `{:num +.1f}` adds a `+` flag to the printf body: positives render
+-- `{:num %+.1f}` adds a `+` flag to the printf body: positives render
 -- with a leading `+`, negatives with a Unicode minus (`−`, U+2212) so
 -- positive and negative cells visually align. A trailing literal `%` is
 -- just tacked on after formatting; if your data is in 0-1 proportions,
@@ -12,4 +12,4 @@ SELECT region, growth_rate * 100 AS growth_rate FROM (VALUES
 ) AS growth(region, growth_rate)
 TABULATE region, growth_rate
 FORMAT growth_rate
-  RENAMING * => '{:num +.1f}%'
+  RENAMING * => '{:num %+.1f}%'
