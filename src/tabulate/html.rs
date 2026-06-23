@@ -864,10 +864,7 @@ fn render_tr(
                         (format!("{} {}", style, bg_decl), attr)
                     } else {
                         let ideal = crate::tabulate::scale::ideal_fg(hex);
-                        (
-                            format!("{} {} color: {};", style, bg_decl, ideal),
-                            attr,
-                        )
+                        (format!("{} {} color: {};", style, bg_decl, ideal), attr)
                     }
                 }
                 None => (style, String::new()),
