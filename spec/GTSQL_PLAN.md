@@ -705,6 +705,32 @@ LABEL
 
 ---
 
+## Reserved barewords
+
+The following words are **reserved clause keywords** and may not be used
+unquoted as column names in any `TABULATE` query:
+
+```
+TABULATE  FORMAT   FACET    SCALE    HIGHLIGHT  LABEL
+SETTING   RENAMING FILTER   FROM
+STUB      SPAN     AS       TO       VIA
+```
+
+Inside `LABEL`, three additional keys are reserved (they refer to the
+table-level header text, not a column): `title`, `subtitle`, `caption`.
+
+To use any reserved word as a column name, quote it with double quotes:
+`LABEL "label" => 'My Label'` labels a column literally named `label`.
+
+Explicitly *not* reserved are the inner `SETTING` / `RENAMING` parameter
+keys: `target`, `aggregate`, `groups`, `side`, `label`, `missing_text`,
+`width`, `align`, `hide`, `locale`, `face`, `color`, `background`,
+`size`, `transform`, `decoration`, `foreground`, `opacity`. These only
+have meaning inside their respective `SETTING` blocks and may be used
+as column names elsewhere without quoting.
+
+---
+
 ## Interaction with VISUALISE
 
 A single query may contain either `VISUALISE` clauses **or** `TABULATE`

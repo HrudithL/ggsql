@@ -51,6 +51,27 @@ Grammar entry point: extend `tree-sitter-ggsql/grammar.js` `query` rule with
 
 ## 2. Syntax reference (fixture-accurate)
 
+### Reserved barewords
+
+The spec's \"Reserved barewords\" section lists every keyword that
+requires quoting when used as a column name. In short:
+
+- Top-level clause keywords: `TABULATE`, `FORMAT`, `FACET`, `SCALE`,
+  `HIGHLIGHT`, `LABEL`.
+- Subclause keywords: `SETTING`, `RENAMING`, `FILTER`, `FROM`.
+- Inline keywords inside a `FORMAT`: `STUB`, `SPAN`, `AS`.
+- Inline keywords inside `SCALE`: `TO`, `VIA`.
+- `LABEL`-only reserved keys: `title`, `subtitle`, `caption`.
+
+Inner `SETTING` keys (`target`, `aggregate`, `groups`, `side`, `label`,
+`missing_text`, `width`, `align`, `hide`, `locale`, `face`, `color`,
+`background`, `size`, `transform`, `decoration`, `foreground`,
+`opacity`) are **not** reserved and may freely be used as column names
+without quoting.
+
+To use a reserved bareword as a column name, quote it with double quotes
+(`"format"` for a column literally named `format`).
+
 ### 2.1 `TABULATE`
 
 ```
