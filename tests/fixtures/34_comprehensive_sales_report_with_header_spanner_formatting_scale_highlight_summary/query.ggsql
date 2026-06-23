@@ -27,7 +27,7 @@ FACET region
           side => 'bottom'
 
 SCALE background FROM (0, 1) TO ('white', 'green')
-  SETTING target => satisfaction
+  SETTING target => (satisfaction)
 
 HIGHLIGHT satisfaction
   FILTER satisfaction < 0.7

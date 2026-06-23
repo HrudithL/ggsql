@@ -10,4 +10,4 @@ SELECT
   'Wayne Enterprises',            312
 TABULATE company, units
 SCALE background TO viridis
-  SETTING target => units
+  SETTING target => (units)
