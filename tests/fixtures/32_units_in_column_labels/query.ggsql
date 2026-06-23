@@ -3,10 +3,10 @@ TABULATE name, land_area_km2, density_2021
 FORMAT STUB name
 FORMAT land_area_km2
   SETTING units => 'km^2'
-  RENAMING * => '{:num \'.1f}'
+  RENAMING * => '{:num %\'.1f}'
 FORMAT density_2021
   SETTING units => 'people/km^2'
-  RENAMING * => '{:num \'d}'
+  RENAMING * => '{:num %\'d}'
 LABEL
   land_area_km2 => 'Land Area',
   density_2021  => 'Density'
