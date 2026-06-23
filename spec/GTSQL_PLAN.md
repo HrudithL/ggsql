@@ -149,7 +149,7 @@ All subclauses within `FORMAT` are optional. Multiple `FORMAT` clauses can appea
 The `SETTING` subclause on `FORMAT` controls display properties:
 
 - `width => 'string'` — column width, e.g., `'120px'`, `'20%'` (maps to `cols_width()`)
-- `align => 'string'` — alignment: `'left'`, `'center'`, `'right'`, `'auto'` (maps to `cols_align()`)
+- `align => 'string'` — alignment: `'left'`, `'center'`, `'right'`, `'auto'` (maps to `cols_align()`). `'auto'` (the default when `align` is omitted) follows gt's `cols_align(align = "auto")` rule: `numeric` / `integer` / `date` / `time` / `datetime` columns right-align, `character` / `factor` columns left-align, and all other types center-align.
 - `hide => true/false` — hide column from display (maps to `cols_hide()`)
 - `locale => 'string'` — locale for this column's formatting (e.g., `'fr'`, `'ja'`, `'pt-BR'`); controls number/date rendering in `RENAMING` (maps to `locale` param in `fmt_*()` calls for this column)
 

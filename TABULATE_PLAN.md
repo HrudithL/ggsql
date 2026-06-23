@@ -111,6 +111,10 @@ FORMAT [SPAN | STUB] <col> [, <col>...] [AS <id>]
 | `hide`    | bool    | `cols_hide()`                       | 9       |
 | `locale`  | string  | per-column locale for formatters    | 21      |
 
+> `align => 'auto'` (the default) follows gt's `cols_align(align='auto')`
+> rule: numeric / integer / date / time / datetime columns right-align,
+> character / factor columns left-align, and all other types center.
+>
 > To put a unit in a column header, set `LABEL <col> => 'Label (km²)'`.
 > There is no `units` SETTING.
 
