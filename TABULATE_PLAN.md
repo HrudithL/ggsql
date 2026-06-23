@@ -268,6 +268,10 @@ HIGHLIGHT <col> [, <col>...]
 - **Conflict resolution.** When two `HIGHLIGHT`s (or a `HIGHLIGHT` and a
   `SCALE`) write the same CSS property on the same cell, the clause
   appearing later in the query wins.
+- **Two HIGHLIGHTs vs one with OR.** Two `HIGHLIGHT`s with disjoint
+  filters and the same style produce the same output as one `HIGHLIGHT`
+  whose `FILTER` combines them with `OR`. Use separate `HIGHLIGHT`s for
+  per-predicate styles, one with `OR` for a shared style.
 
 ### 2.6 `LABEL`
 

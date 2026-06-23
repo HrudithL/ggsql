@@ -545,6 +545,12 @@ and a `SCALE`) write the same CSS property on the same cell, the
 clause appearing **later in the query wins** — the later style overrides
 the earlier per-property.
 
+**Two HIGHLIGHTs vs one HIGHLIGHT with OR.** Two `HIGHLIGHT`s with
+disjoint filters and the same style block produce identical output to a
+single `HIGHLIGHT` whose `FILTER` combines both predicates with `OR`.
+Use separate `HIGHLIGHT`s when the styles differ per predicate; use one
+with `OR` when the style is shared.
+
 **Example:**
 ```sql
 TABULATE name, score, grade FROM students
