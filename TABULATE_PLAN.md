@@ -96,6 +96,8 @@ FORMAT [SPAN | STUB] <col> [, <col>...] [AS <id>]
     default display label; override via `LABEL <id> => '<text>'`.
   - Spanner IDs and column names share a namespace; nesting is done by
     listing spanner IDs in a later `FORMAT SPAN ... AS <parent>`.
+  - A spanner ID must not collide with an existing column name nor with
+    another spanner ID in the same query (parse-time error).
 - `STUB` — designate column(s) as the row-label stub (gt `rowname_col`).
 - Multiple columns may appear before `SETTING` / `RENAMING`; the subclauses
   apply to every listed column.

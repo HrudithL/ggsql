@@ -133,6 +133,8 @@ FORMAT [SPAN|STUB] <column>, ... [AS <id>]
 ```
 
 - `SPAN` — groups columns (or other spanners) under a spanner (maps to `tab_spanner()`); `AS <id>` is a **bareword identifier** that names the spanner. The identifier is *also* the default display label, so a spanner with `AS region_totals` renders as `region_totals` in the header until you override it via the `LABEL` clause (`LABEL region_totals => 'Regional Totals'`). The identifier is what later `FORMAT SPAN` clauses reference when nesting spanners.
+
+  **Spanner IDs share a namespace with column names.** A spanner ID must not collide with an existing column name, nor with another spanner ID in the same query. Collisions are a parse-time error.
 - `STUB` — designates column(s) as the table stub / row labels (maps to `gt(rowname_col=...)`)
 - Without `SPAN`/`STUB` — standard formatting; `AS <id>` on a stub column names the stubhead (also relabel-able via `LABEL`)
 
