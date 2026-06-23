@@ -852,6 +852,16 @@ fn render_tr(
                 style_final.push(' ');
                 style_final.push_str(&decl);
             }
+            // HIGHLIGHT size/transform/decoration → matching CSS props.
+            if let Some(sz) = hl.and_then(|h| h.size.as_deref()) {
+                style_final.push_str(&format!(" font-size: {};", sz));
+            }
+            if let Some(t) = hl.and_then(|h| h.transform.as_deref()) {
+                style_final.push_str(&format!(" text-transform: {};", t));
+            }
+            if let Some(d) = hl.and_then(|h| h.decoration.as_deref()) {
+                style_final.push_str(&format!(" text-decoration: {};", d));
+            }
             let headers = match (&group_name, &stub_id) {
                 (Some(g), Some(sid)) => format!("{} {} {}", g, sid, col.name),
                 (Some(g), None) => format!("{} {}", g, col.name),

@@ -123,11 +123,24 @@ pub struct CellStyle {
     pub color: Option<String>,
     /// `face => 'bold' | 'italic' | 'normal'` (rendered verbatim).
     pub face: Option<String>,
+    /// `size => '<css length>'` (rendered verbatim into `font-size`).
+    pub size: Option<String>,
+    /// `transform => 'uppercase' | 'lowercase' | 'capitalize' | 'none'`
+    /// (rendered verbatim into `text-transform`).
+    pub transform: Option<String>,
+    /// `decoration => 'underline' | 'line-through' | 'overline' | 'none'`
+    /// (rendered verbatim into `text-decoration`).
+    pub decoration: Option<String>,
 }
 
 impl CellStyle {
     pub fn is_empty(&self) -> bool {
-        self.background.is_none() && self.color.is_none() && self.face.is_none()
+        self.background.is_none()
+            && self.color.is_none()
+            && self.face.is_none()
+            && self.size.is_none()
+            && self.transform.is_none()
+            && self.decoration.is_none()
     }
 }
 
@@ -967,6 +980,9 @@ fn build_cell_style(
         let mut bg: Option<String> = None;
         let mut color: Option<String> = None;
         let mut face: Option<String> = None;
+        let mut size: Option<String> = None;
+        let mut transform: Option<String> = None;
+        let mut decoration: Option<String> = None;
         for s in &hl.settings {
             let val = match &s.value {
                 crate::tabulate::ast::SettingValue::String(v) => v.clone(),
@@ -977,6 +993,9 @@ fn build_cell_style(
                 "background" => bg = Some(crate::tabulate::scale::parse_to_hex_upper(&val)),
                 "color" => color = Some(crate::tabulate::scale::parse_to_hex_upper(&val)),
                 "face" => face = Some(val),
+                "size" => size = Some(val),
+                "transform" => transform = Some(val),
+                "decoration" => decoration = Some(val),
                 _ => {}
             }
         }
@@ -999,6 +1018,15 @@ fn build_cell_style(
                 }
                 if let Some(f) = &face {
                     cs.face = Some(f.clone());
+                }
+                if let Some(s) = &size {
+                    cs.size = Some(s.clone());
+                }
+                if let Some(t) = &transform {
+                    cs.transform = Some(t.clone());
+                }
+                if let Some(d) = &decoration {
+                    cs.decoration = Some(d.clone());
                 }
             }
         }

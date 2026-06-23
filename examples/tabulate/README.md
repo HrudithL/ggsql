@@ -101,3 +101,6 @@ a browser:
 | [`43_raw_passthrough.ggsql`](43_raw_passthrough.ggsql) | `RENAMING * => '${} USD'` — raw `{}` passthrough with literal prefix/suffix; no formatter applied |
 | [`44_facet_groups_restrict.ggsql`](44_facet_groups_restrict.ggsql) | `FACET … SETTING groups => ['North', 'South']` — restrict summary rows to specific group values |
 | [`45_facet_groups_error.ggsql`](45_facet_groups_error.ggsql) | **Negative test** — naming a non-existent group in `groups => [...]` errors at execute time with `FACET groups: '<name>' is not a value of grouping column '<col>'`. Files ending in `_error` are handled specially by `run.sh`, which captures the diagnostic and embeds it in the index. |
+| [`46_highlight_size.ggsql`](46_highlight_size.ggsql) | `HIGHLIGHT … SETTING size => '20px'` — bump the cell `font-size` when the filter matches |
+| [`47_highlight_transform.ggsql`](47_highlight_transform.ggsql) | `HIGHLIGHT … SETTING transform => 'uppercase'` — apply CSS `text-transform` to matching cells |
+| [`48_highlight_decoration.ggsql`](48_highlight_decoration.ggsql) | `HIGHLIGHT … SETTING decoration => 'line-through'` — apply CSS `text-decoration` to matching cells |
