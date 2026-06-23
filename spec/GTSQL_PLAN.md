@@ -63,7 +63,7 @@ SCALE background FROM (0, 10) TO ('white', 'red') VIA log10
 SCALE background TO ('#eee', '#d00')  -- auto domain from data
   SETTING target => (col2, col3)
 SCALE background TO viridis            -- named palette
-  SETTING target => col4
+  SETTING target => (col4)
 
 -- Arbitrary styling (can appear multiple times)
 HIGHLIGHT <column>, ...
@@ -383,7 +383,7 @@ Only one `FACET` clause may appear per query.
 #### 3.1 `FACET ... SETTING` — Aggregation Configuration
 
 **Settings:**
-- `target => <column>` or `target => (<col1>, <col2>, ...)` — column(s) to aggregate (maps to `summary_rows(columns = ...)`). Required when `aggregate` is set. Mirrors the `target` syntax used in `SCALE`.
+- `target => (<col>)` (single column) or `target => (<col1>, <col2>, ...)` (multiple columns) — column(s) to aggregate (maps to `summary_rows(columns = ...)`). Required when `aggregate` is set. Mirrors the `target` syntax used in `SCALE`. The bareword form `target => <col>` (without parentheses) is no longer accepted.
 - `aggregate => (<fn>, ...)` — aggregation function(s) to apply. Recognized functions: `'min'`, `'max'`, `'avg'`, `'median'`, `'sd'`, `'sum'`. `'mean'` is rejected (use `'avg'`). Required when `target` is set. Omit both `target` and `aggregate` to use `FACET` purely for row grouping.
 - `groups => [grp1, grp2]` — **optional**. Restricts summary rows to the listed group values from the `<group_col>`. Default (omitted): every group receives summaries. Referencing a group value that does not exist in the data is a parse-/execution-time error. Only meaningful when `FACET` has a grouping column.
 - `side => 'top'/'bottom'` — placement of summary rows relative to each group (default: `'bottom'`)
@@ -420,7 +420,7 @@ FACET
 -- Grouped summary at the top, restricted to specific group values
 TABULATE region, quarter, revenue FROM sales
 FACET region
-  SETTING target => revenue,
+  SETTING target => (revenue),
           aggregate => ('avg'),
           side => 'top',
           groups => ['North', 'South'],
@@ -444,7 +444,7 @@ The `SCALE` clause maps a continuous data range to a visual property range, appl
 **Syntax:**
 ```sql
 SCALE <aesthetic> [FROM (<min>, <max>)] TO (<val1>, <val2>) [VIA <transform>]
-  SETTING target => <column> | (<col1>, <col2>, ...)
+  SETTING target => (<col>) | (<col1>, <col2>, ...)
   FILTER <condition>
 ```
 
@@ -457,7 +457,7 @@ SCALE <aesthetic> [FROM (<min>, <max>)] TO (<val1>, <val2>) [VIA <transform>]
 - `FROM (<min>, <max>)` — the data domain (numeric range); **optional** — if omitted, the domain is inferred from the column’s actual data range (matching ggsql’s existing `SCALE` behavior and gt’s `domain = NULL` default)
 - `TO (<val1>, <val2>)` or `TO <palette_name>` — the output range. Either an explicit pair of values (colors for `background`/`foreground`; sizes for `size`; numeric for `opacity`) or a named palette (e.g., `viridis`, `blues`, `vik`). Named palettes use the same catalogue as `VISUALISE SCALE` — see [ggsql color palettes](https://ggsql.org/syntax/scale/aesthetic/1_color.html)
 - `VIA <transform>` — optional transform: `log10`, `sqrt`, `reverse`, etc.
-- `SETTING target => <column>` or `SETTING target => (<col1>, <col2>, ...)` — which column(s) to apply the scale to (**required**). Accepts a single column name or a parenthesized list of columns. When multiple columns are listed, the same scale is applied independently to each column (each column's values are mapped through the same domain→range). In `VISUALISE`, the aesthetic target is implicit via `DRAW ... col AS fill`; in `TABULATE` there is no aesthetic binding syntax, so `target` explicitly names the column(s) whose values drive the scale and receive the styled output
+- `SETTING target => (<col>)` (single column) or `SETTING target => (<col1>, <col2>, ...)` (multiple) — which column(s) to apply the scale to (**required**). The list must always be parenthesized, even for a single column. The bareword form `target => <col>` is not accepted. When multiple columns are listed, the same scale is applied independently to each column (each column's values are mapped through the same domain→range). In `VISUALISE`, the aesthetic target is implicit via `DRAW ... col AS fill`; in `TABULATE` there is no aesthetic binding syntax, so `target` explicitly names the column(s) whose values drive the scale and receive the styled output
 - `FILTER <condition>` — **optional** row selection; only rows matching the condition receive the scaled styling (maps to gt’s `data_color(rows = ...)` / `tab_style(locations = cells_body(rows = ...))`) . Uses the same SQL-like expressions as `HIGHLIGHT ... FILTER`
 
 **Conflict resolution.** When two `SCALE` clauses, or a `SCALE` and a
@@ -470,36 +470,36 @@ later style overrides the earlier per-property.
 -- Color scale with explicit domain
 TABULATE country, population, gdp_per_capita FROM world_data
 SCALE background FROM (0, 100000) TO ('white', 'darkgreen') VIA log10
-  SETTING target => gdp_per_capita
+  SETTING target => (gdp_per_capita)
 
 -- Auto domain (inferred from data) — equivalent to data_color(domain = NULL)
 SCALE background TO ('#f7fbff', '#08306b')
-  SETTING target => population
+  SETTING target => (population)
 
 -- Font size scale with auto domain
 SCALE size TO ('12px', '28px')
-  SETTING target => population
+  SETTING target => (population)
 
 -- Foreground color with explicit domain
 SCALE foreground FROM (0, 1) TO ('black', 'red')
-  SETTING target => error_rate
+  SETTING target => (error_rate)
 
 -- Row-filtered scale: only color rows matching compound condition
 SCALE background FROM (1000, 100000) TO ('white', 'darkgreen')
-  SETTING target => revenue
+  SETTING target => (revenue)
   FILTER revenue > 1000 AND region IN ('North', 'South')
 
 -- Opacity scale: fade less important rows
 SCALE opacity FROM (0, 100) TO (0.3, 1.0)
-  SETTING target => relevance_score
+  SETTING target => (relevance_score)
 
 -- Named palette (same syntax as VISUALISE SCALE)
 SCALE background TO viridis
-  SETTING target => temperature
+  SETTING target => (temperature)
 
 -- Named diverging palette with explicit domain
 SCALE background FROM (-1, 1) TO vik
-  SETTING target => correlation
+  SETTING target => (correlation)
 ```
 
 **gt mapping:**
@@ -641,7 +641,7 @@ FACET
 
 -- Conditional styling
 SCALE background FROM (0, 1) TO ('white', 'green')
-  SETTING target => satisfaction
+  SETTING target => (satisfaction)
 
 HIGHLIGHT satisfaction
   FILTER satisfaction < 0.7

@@ -217,8 +217,9 @@ FACET [<group_col>]
 - One `FACET` per query.
 - `<group_col>` optional. Present → `gt(groupname_col = ...)`. Absent →
   table-wide summary rows only.
-- `target` accepts a single bareword column or a parenthesized list. Mirrors
-  `SCALE ... SETTING target =>`.
+- `target` accepts a parenthesized list (`(col)`, `(col1, col2)`). Mirrors
+  `SCALE ... SETTING target =>`. The bareword form `target => col` is no
+  longer accepted — wrap even single columns in parens.
 - `aggregate` functions: `'min'`, `'max'`, `'avg'`, `'median'`, `'sd'`, `'sum'`.
   (`'mean'` is rejected — use `'avg'`.)
 - `groups => [v1, v2]` is optional. When omitted, every group of
@@ -241,7 +242,8 @@ SCALE <aesthetic> [FROM (<min>, <max>)] TO (<v1>, <v2>) | TO <palette> [VIA <tra
   names (fixtures use `viridis`, `RdYlGn`). Reuses the ggsql VISUALISE
   palette catalogue.
 - `VIA <transform>`: `log10`, `sqrt`, `reverse` (fixture 25 uses `log10`).
-- `target` is required. Single column or list.
+- `target` is required. Always a parenthesized list — `(col)` or
+  `(col1, col2, ...)`. The bareword `target => col` form is rejected.
 - `FILTER` is optional row-restriction using the same SQL-like expression
   language as `HIGHLIGHT ... FILTER`.
 - **Conflict resolution.** When two `SCALE` clauses (or a `SCALE` and a
