@@ -511,3 +511,10 @@ Each subagent's job description includes:
 - Nanoplots / footnotes / multi-stub.
 - New ggsql syntax beyond what is in the spec.
 - `/spec/GTSQL_EXAMPLES.qmd` (per C7): no edits anywhere in this pass.
+---
+
+## Baseline
+
+- Branch `polishing` cut from `main` at `5c6bc7a` (Merge phase 12).
+- `cargo test -p ggsql --no-default-features --features duckdb,parquet,vegalite,builtin-data --test tabulate_fixtures`: **35 passed, 0 failed, 3 ignored**.
+- Untracked working tree clean apart from the plan itself.
