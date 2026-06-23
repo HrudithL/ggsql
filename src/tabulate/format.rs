@@ -8,10 +8,11 @@
 //!
 //! Two formatter mini-languages live inside the `{...}`:
 //!
-//! * `{:num <printf-body>}` — numeric formatter. The body is a printf
-//!   conversion specification *without* the leading `%` introducer (e.g.
-//!   `{:num \'d}`, `{:num .3f}`, `{:num .2e}`). The only thousands flag is
-//!   `'` (written as `\'` inside the single-quoted RHS).
+//! * `{:num <printf-body>}` — numeric formatter. The body is a
+//!   `printf(3)`-style conversion specification *with* the leading `%`
+//!   introducer (e.g. `{:num %\'d}`, `{:num %.3f}`, `{:num %.2e}`). The
+//!   only thousands flag is `'` (written as `\'` inside the
+//!   single-quoted RHS).
 //! * `{:time <strftime>}` — date / time formatter; strftime tokens are
 //!   gt-compatible: `%d`, `%I`, `%H`, `%M`, `%S` render unpadded to match
 //!   gt's named styles, matching the `%-d` / `%-I` GNU extensions used in
@@ -181,12 +182,9 @@ struct NumSpec {
 
 impl NumSpec {
     fn parse(body: &str) -> Option<Self> {
-        // The `%` printf introducer is intentionally rejected: specs are
-        // written without it (e.g. `{:num \'d}`, not `{:num %\'d}`).
-        if body.starts_with('%') {
-            return None;
-        }
-        let mut s = body;
+        // The `%` printf introducer is required (matches the spec). A body
+        // that does not start with `%` is not a numeric formatter.
+        let mut s = body.strip_prefix('%')?;
         let mut thousands = false;
         let mut force_sign = false;
         // Flags loop. Stop on the first byte that is not a recognised flag.
@@ -649,57 +647,57 @@ mod tests {
 
     #[test]
     fn num_legacy_decimals() {
-        assert_eq!(num("{:num .3f}", 0.1111), "0.111");
-        assert_eq!(num("{:num .3f}", 5550.0), "5550.000");
+        assert_eq!(num("{:num %.3f}", 0.1111), "0.111");
+        assert_eq!(num("{:num %.3f}", 5550.0), "5550.000");
     }
     #[test]
     fn num_thousands_apostrophe_int() {
-        assert_eq!(num("{:num 'd}", 5550.0), "5,550");
-        assert_eq!(num("{:num 'd}", 8_880_000.0), "8,880,000");
+        assert_eq!(num("{:num %'d}", 5550.0), "5,550");
+        assert_eq!(num("{:num %'d}", 8_880_000.0), "8,880,000");
     }
     #[test]
     fn num_thousands_apostrophe() {
-        assert_eq!(num("{:num 'd}", 5550.0), "5,550");
+        assert_eq!(num("{:num %'d}", 5550.0), "5,550");
     }
     #[test]
     fn num_currency_prefix() {
-        assert_eq!(num("${:num 'd}", 447_000.0), "$447,000");
+        assert_eq!(num("${:num %'d}", 447_000.0), "$447,000");
     }
     #[test]
     fn num_percent_suffix_is_literal() {
         // A trailing `%` is just an appended literal character — no
         // scaling, no special handling.
-        assert_eq!(num("{:num .1f}%", 8.5), "8.5%");
-        assert_eq!(num("{:num .1f}%", 0.085), "0.1%");
+        assert_eq!(num("{:num %.1f}%", 8.5), "8.5%");
+        assert_eq!(num("{:num %.1f}%", 0.085), "0.1%");
     }
     #[test]
     fn num_arbitrary_suffix_is_literal() {
         // Anything after the `{...}` is tacked on verbatim to each
         // formatted number.
-        assert_eq!(num("{:num 'd}abc", 5550.0), "5,550abc");
-        assert_eq!(num("{:num .1f}%%", 8.5), "8.5%%");
+        assert_eq!(num("{:num %'d}abc", 5550.0), "5,550abc");
+        assert_eq!(num("{:num %.1f}%%", 8.5), "8.5%%");
     }
     #[test]
     fn num_forced_sign() {
-        assert_eq!(num("{:num +.1f}%", 8.5), "+8.5%");
-        assert_eq!(num("{:num +.1f}%", -8.5), "\u{2212}8.5%");
+        assert_eq!(num("{:num %+.1f}%", 8.5), "+8.5%");
+        assert_eq!(num("{:num %+.1f}%", -8.5), "\u{2212}8.5%");
     }
     #[test]
     fn num_unforced_negative_is_ascii_minus() {
         // Without `+`, negatives keep the ASCII hyphen-minus.
-        assert_eq!(num("{:num .1f}", -1.5), "-1.5");
+        assert_eq!(num("{:num %.1f}", -1.5), "-1.5");
     }
     #[test]
-    fn num_percent_introducer_is_rejected() {
-        // `{:num %...}` no longer parses; build_format returns None,
-        // so build_num_format / build_format both return None and the
-        // RHS is treated as plain text.
-        assert!(build_format("{:num %.2f}", None).is_none());
-        assert!(build_format("{:num %'d}", None).is_none());
+    fn num_percent_introducer_is_required() {
+        // The `%` introducer is now mandatory; a body without it does
+        // not parse as a numeric formatter, so build_format returns
+        // None and the RHS is treated as plain text.
+        assert!(build_format("{:num .2f}", None).is_none());
+        assert!(build_format("{:num 'd}", None).is_none());
     }
     #[test]
     fn num_scientific_html() {
-        let s = num("{:num .2e}", 1e-6);
+        let s = num("{:num %.2e}", 1e-6);
         assert!(s.contains("<sup"), "got {}", s);
         assert!(s.contains("\u{2212}6"), "minus exponent: {}", s);
         assert!(s.starts_with("1.00&nbsp;"), "mantissa: {}", s);
@@ -708,9 +706,9 @@ mod tests {
     fn num_scientific_exp_zero_is_plain_mantissa() {
         // 1 <= |x| < 10 ⇒ exponent is 0; emit the mantissa alone,
         // not `× 10⁰`.
-        assert_eq!(num("{:num .2e}", 4.2), "4.20");
-        assert_eq!(num("{:num .2e}", 0.0), "0.00");
-        assert_eq!(num("{:num .2e}", -1.5), "-1.50");
+        assert_eq!(num("{:num %.2e}", 4.2), "4.20");
+        assert_eq!(num("{:num %.2e}", 0.0), "0.00");
+        assert_eq!(num("{:num %.2e}", -1.5), "-1.50");
     }
     #[test]
     fn time_english_date() {
