@@ -1,0 +1,15 @@
+-- `SCALE foreground` colours the cell *text* along a continuous ramp.
+-- Same syntax as `SCALE background` (palette stops or named palette,
+-- optional `FROM (lo, hi)` domain, optional `VIA log10` transform),
+-- but writes to CSS `color` instead of `background-color`.
+SELECT * FROM (VALUES
+  ('Alpha',    0.1),
+  ('Bravo',    0.4),
+  ('Charlie',  0.6),
+  ('Delta',    0.9)
+) AS rates(name, error_rate)
+TABULATE name, error_rate
+FORMAT STUB name
+FORMAT error_rate RENAMING * => '{:num %.2f}'
+SCALE foreground FROM (0, 1) TO ('black', 'red')
+  SETTING target => (error_rate)

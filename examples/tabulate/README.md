@@ -104,3 +104,6 @@ a browser:
 | [`46_highlight_size.ggsql`](46_highlight_size.ggsql) | `HIGHLIGHT … SETTING size => '20px'` — bump the cell `font-size` when the filter matches |
 | [`47_highlight_transform.ggsql`](47_highlight_transform.ggsql) | `HIGHLIGHT … SETTING transform => 'uppercase'` — apply CSS `text-transform` to matching cells |
 | [`48_highlight_decoration.ggsql`](48_highlight_decoration.ggsql) | `HIGHLIGHT … SETTING decoration => 'line-through'` — apply CSS `text-decoration` to matching cells |
+| [`49_scale_foreground.ggsql`](49_scale_foreground.ggsql) | `SCALE foreground FROM (lo, hi) TO ('<lo>', '<hi>')` — continuous text-colour ramp |
+| [`50_scale_size.ggsql`](50_scale_size.ggsql) | `SCALE size FROM (lo, hi) TO ('12px', '28px')` — continuous font-size ramp |
+| [`51_scale_opacity.ggsql`](51_scale_opacity.ggsql) | `SCALE opacity FROM (lo, hi) TO ('0.2', '1.0')` — modulates the alpha on a composed `SCALE background` (renders as `rgba(...)`) |

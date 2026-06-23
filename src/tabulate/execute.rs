@@ -67,6 +67,20 @@ pub struct TableIr {
     /// HTML writer derives the contrasting foreground colour via
     /// [`super::scale::ideal_fg`].
     pub cell_bg: Vec<Vec<Option<String>>>,
+    /// Per-cell text colour from `SCALE foreground`. Same shape as
+    /// [`Self::rows`]. `None` for cells with no `SCALE foreground`. A
+    /// `Some(hex)` value sets the cell's CSS `color` property.
+    pub cell_fg: Vec<Vec<Option<String>>>,
+    /// Per-cell font-size from `SCALE size`. Same shape as
+    /// [`Self::rows`]. `None` for cells with no `SCALE size`. A
+    /// `Some(css)` value (e.g. `"14.5px"`) sets the cell's CSS
+    /// `font-size` property.
+    pub cell_size: Vec<Vec<Option<String>>>,
+    /// Per-cell opacity from `SCALE opacity` (range 0..=1). Same shape
+    /// as [`Self::rows`]. `None` for cells with no `SCALE opacity`.
+    /// When both a background colour and an opacity are set, the
+    /// renderer emits `background-color: rgba(r, g, b, a)`.
+    pub cell_opacity: Vec<Vec<Option<f32>>>,
     /// Per-cell style overrides from `HIGHLIGHT` clauses. Same shape as
     /// [`Self::rows`]. Empty `CellStyle` (all `None`) means no highlight
     /// applies. When multiple `HIGHLIGHT`s target the same cell, the
@@ -759,7 +773,8 @@ fn build_table_ir(
 
     let header_forest = build_header_forest(tab_stmt, &columns, &label_map);
 
-    let cell_bg = build_cell_bg(tab_stmt, &columns, combined);
+    let (cell_bg, cell_fg, cell_size, cell_opacity) =
+        build_cell_scale(tab_stmt, &columns, combined);
     let cell_style = build_cell_style(tab_stmt, &columns, combined);
 
     // Compute row groups + summary rows from the FACET clause.
@@ -769,6 +784,9 @@ fn build_table_ir(
         columns,
         rows,
         cell_bg,
+        cell_fg,
+        cell_size,
+        cell_opacity,
         cell_style,
         groups,
         title,
@@ -862,27 +880,40 @@ fn build_header_forest(
     nodes
 }
 
-/// Compute the per-cell background-colour matrix from any `SCALE background`
-/// clauses in `tab_stmt`. Returns a matrix the same shape as `TableIr::rows`,
-/// where `None` means no scale applies to that cell and `Some(hex)` is the
-/// resolved uppercase 6-digit colour. If multiple scales target the same
-/// column the later clause wins (matching gt's last-writer-wins semantics).
-fn build_cell_bg(
+/// Compute the per-cell SCALE matrices for any `SCALE <aesthetic>`
+/// clauses in `tab_stmt`. Returns four parallel matrices the same shape
+/// as `TableIr::rows`:
+///
+/// * background colour (`SCALE background` → uppercase `#RRGGBB`)
+/// * foreground / text colour (`SCALE foreground` → uppercase `#RRGGBB`)
+/// * font-size CSS string (`SCALE size` → e.g. `"14.50px"`)
+/// * opacity 0..=1 (`SCALE opacity` → f32)
+///
+/// When multiple SCALE clauses target the same cell + aesthetic the
+/// later clause wins (matching gt's last-writer-wins semantics).
+#[allow(clippy::type_complexity)]
+fn build_cell_scale(
     tab_stmt: &TabulateStmt,
     columns: &[ColMeta],
     combined: &RecordBatch,
-) -> Vec<Vec<Option<String>>> {
+) -> (
+    Vec<Vec<Option<String>>>,
+    Vec<Vec<Option<String>>>,
+    Vec<Vec<Option<String>>>,
+    Vec<Vec<Option<f32>>>,
+) {
     use crate::tabulate::scale::{map_value, resolve_stops};
     let nrows = combined.num_rows();
     let ncols = columns.len();
-    let mut out: Vec<Vec<Option<String>>> = (0..nrows).map(|_| vec![None; ncols]).collect();
+    let mut bg: Vec<Vec<Option<String>>> = (0..nrows).map(|_| vec![None; ncols]).collect();
+    let mut fg: Vec<Vec<Option<String>>> = (0..nrows).map(|_| vec![None; ncols]).collect();
+    let mut sz: Vec<Vec<Option<String>>> = (0..nrows).map(|_| vec![None; ncols]).collect();
+    let mut op: Vec<Vec<Option<f32>>> = (0..nrows).map(|_| vec![None; ncols]).collect();
 
     for sc in &tab_stmt.scale_clauses {
-        if !sc.aesthetic.eq_ignore_ascii_case("background") {
-            continue;
-        }
+        let aesthetic = sc.aesthetic.to_ascii_lowercase();
         let stops = resolve_stops(&sc.palette);
-        if stops.is_empty() {
+        if stops.is_empty() && !matches!(aesthetic.as_str(), "size" | "opacity") {
             continue;
         }
         let transform = sc.transform.as_deref();
@@ -923,13 +954,133 @@ fn build_cell_bg(
                 }
             };
 
-            for (row_idx, row_cells) in out.iter_mut().enumerate().take(nrows) {
-                let v = numeric_to_f64(arr, row_idx);
-                row_cells[col_idx] = Some(map_value(v, domain, &stops, transform));
+            match aesthetic.as_str() {
+                "background" => {
+                    for (row_idx, row_cells) in bg.iter_mut().enumerate().take(nrows) {
+                        let v = numeric_to_f64(arr, row_idx);
+                        row_cells[col_idx] = Some(map_value(v, domain, &stops, transform));
+                    }
+                }
+                "foreground" | "color" => {
+                    for (row_idx, row_cells) in fg.iter_mut().enumerate().take(nrows) {
+                        let v = numeric_to_f64(arr, row_idx);
+                        row_cells[col_idx] = Some(map_value(v, domain, &stops, transform));
+                    }
+                }
+                "size" => {
+                    // For `size`, the TO stops are CSS length strings
+                    // (e.g. `'12px'`, `'28px'`). Parse to numeric px and
+                    // interpolate linearly between adjacent stops via
+                    // the normalized t = (v - lo) / (hi - lo).
+                    let px_stops: Vec<f32> = match &sc.palette {
+                        crate::tabulate::ast::ScalePalette::Stops(s) => {
+                            s.iter().map(|s| parse_css_length_px(s)).collect()
+                        }
+                        crate::tabulate::ast::ScalePalette::Named(_) => continue,
+                    };
+                    if px_stops.len() < 2 {
+                        continue;
+                    }
+                    for (row_idx, row_cells) in sz.iter_mut().enumerate().take(nrows) {
+                        let Some(v) = numeric_to_f64(arr, row_idx) else {
+                            continue;
+                        };
+                        if !v.is_finite() {
+                            continue;
+                        }
+                        let t = scale_t(v, domain.0, domain.1, transform);
+                        let interp = interp_f32(&px_stops, t);
+                        row_cells[col_idx] = Some(format!("{:.2}px", interp));
+                    }
+                }
+                "opacity" => {
+                    // Opacity stops are numbers in [0, 1]. The grammar
+                    // currently parses them as strings; try f32.
+                    let num_stops: Vec<f32> = match &sc.palette {
+                        crate::tabulate::ast::ScalePalette::Stops(s) => s
+                            .iter()
+                            .filter_map(|x| x.parse::<f32>().ok())
+                            .collect(),
+                        crate::tabulate::ast::ScalePalette::Named(_) => continue,
+                    };
+                    if num_stops.len() < 2 {
+                        continue;
+                    }
+                    for (row_idx, row_cells) in op.iter_mut().enumerate().take(nrows) {
+                        let Some(v) = numeric_to_f64(arr, row_idx) else {
+                            continue;
+                        };
+                        if !v.is_finite() {
+                            continue;
+                        }
+                        let t = scale_t(v, domain.0, domain.1, transform);
+                        row_cells[col_idx] = Some(interp_f32(&num_stops, t).clamp(0.0, 1.0));
+                    }
+                }
+                _ => {}
             }
         }
     }
-    out
+    (bg, fg, sz, op)
+}
+
+/// Parse a CSS length string into pixels. Recognises `'12px'`, `'1.5em'`
+/// (16px), `'small'` / `'medium'` / `'large'` keywords. Falls back to
+/// 16.0 on parse failure.
+fn parse_css_length_px(s: &str) -> f32 {
+    let s = s.trim();
+    let kw = s.to_ascii_lowercase();
+    match kw.as_str() {
+        "xx-small" => return 9.0,
+        "x-small" => return 10.0,
+        "small" => return 13.0,
+        "medium" => return 16.0,
+        "large" => return 18.0,
+        "x-large" => return 24.0,
+        "xx-large" => return 32.0,
+        _ => {}
+    }
+    if let Some(num) = s.strip_suffix("px") {
+        return num.trim().parse::<f32>().unwrap_or(16.0);
+    }
+    if let Some(num) = s.strip_suffix("em") {
+        return num.trim().parse::<f32>().unwrap_or(1.0) * 16.0;
+    }
+    if let Some(num) = s.strip_suffix("rem") {
+        return num.trim().parse::<f32>().unwrap_or(1.0) * 16.0;
+    }
+    s.parse::<f32>().unwrap_or(16.0)
+}
+
+/// Normalize `v` into [0, 1] across `[lo, hi]`, optionally log10-warped
+/// to match `SCALE … VIA log10`.
+fn scale_t(v: f64, lo: f64, hi: f64, transform: Option<&str>) -> f32 {
+    let (v_t, lo_t, hi_t) = match transform {
+        Some(t) if t.eq_ignore_ascii_case("log10") => {
+            let logz = |x: f64| if x <= 0.0 { 0.0 } else { x.log10() };
+            (logz(v), logz(lo), logz(hi))
+        }
+        _ => (v, lo, hi),
+    };
+    if hi_t <= lo_t {
+        return 0.0;
+    }
+    (((v_t - lo_t) / (hi_t - lo_t)).clamp(0.0, 1.0)) as f32
+}
+
+/// Piecewise-linear interpolation between adjacent stops at parameter
+/// `t` in [0, 1].
+fn interp_f32(stops: &[f32], t: f32) -> f32 {
+    debug_assert!(!stops.is_empty());
+    if stops.len() == 1 {
+        return stops[0];
+    }
+    let t = t.clamp(0.0, 1.0);
+    let n = stops.len() - 1;
+    let seg_f = t * n as f32;
+    let seg = (seg_f.floor() as usize).min(n - 1);
+    let sub_t = seg_f - seg as f32;
+    stops[seg] * (1.0 - sub_t) + stops[seg + 1] * sub_t
 }
 
 /// Build the per-cell highlight-style matrix from `HIGHLIGHT` clauses.
