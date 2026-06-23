@@ -750,7 +750,7 @@ fn build_table_ir(
     let cell_style = build_cell_style(tab_stmt, &columns, combined);
 
     // Compute row groups + summary rows from the FACET clause.
-    let groups = build_row_groups(tab_stmt, &columns, stub_col_idx, combined);
+    let groups = build_row_groups(tab_stmt, &columns, stub_col_idx, combined)?;
 
     Ok(TableIr {
         columns,
@@ -1017,6 +1017,11 @@ struct FacetView {
     /// When set, summary values are rendered via this format instead of
     /// the default `formatC(format="f", digits=K)` per-column max-K.
     fmt: Option<String>,
+    /// Optional restriction on which group values get summary rows.
+    /// `None` -> every group receives summaries. `Some(list)` ->
+    /// only the listed groups (matched case-insensitively against the
+    /// rendered group-name).
+    groups_filter: Option<Vec<String>>,
 }
 
 impl FacetView {
@@ -1027,6 +1032,7 @@ impl FacetView {
             labels: Vec::new(),
             side: "bottom".to_string(),
             fmt: None,
+            groups_filter: None,
         };
         for s in settings {
             match s.key.to_ascii_lowercase().as_str() {
@@ -1067,6 +1073,15 @@ impl FacetView {
                 "fmt" => {
                     view.fmt = match &s.value {
                         FacetValue::String(v) => Some(v.clone()),
+                        _ => None,
+                    }
+                }
+                "groups" => {
+                    view.groups_filter = match &s.value {
+                        FacetValue::StrList(v) => Some(v.clone()),
+                        FacetValue::IdentList(v) => Some(v.clone()),
+                        FacetValue::String(v) => Some(vec![v.clone()]),
+                        FacetValue::Identifier(v) => Some(vec![v.clone()]),
                         _ => None,
                     }
                 }
@@ -1154,15 +1169,15 @@ fn build_row_groups(
     columns: &[ColMeta],
     stub_col_idx: Option<usize>,
     combined: &RecordBatch,
-) -> Vec<RowGroup> {
+) -> Result<Vec<RowGroup>> {
     let Some(facet) = &tab_stmt.facet else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let nrows = combined.num_rows();
     let schema = combined.schema();
     let group_idx = match schema.index_of(&facet.group_col) {
         Ok(i) => i,
-        Err(_) => return Vec::new(),
+        Err(_) => return Ok(Vec::new()),
     };
     let group_arr = combined.column(group_idx);
 
@@ -1180,6 +1195,19 @@ fn build_row_groups(
     }
 
     let view = FacetView::from_settings(&facet.settings);
+
+    // Validate `groups => [...]`: every named group must exist in the
+    // data. Unknown names are a hard error.
+    if let Some(filter) = &view.groups_filter {
+        for g in filter {
+            if !order.iter().any(|name| name.eq_ignore_ascii_case(g)) {
+                return Err(GgsqlError::ParseError(format!(
+                    "FACET groups: '{}' is not a value of grouping column '{}'",
+                    g, facet.group_col
+                )));
+            }
+        }
+    }
 
     // Map target column names → column index in `columns` for cell placement.
     let target_idxs: Vec<(String, usize)> = view
@@ -1240,12 +1268,23 @@ fn build_row_groups(
         })
     });
 
-    order
+    let rg: Vec<RowGroup> = order
         .into_iter()
         .map(|name| {
             let row_indices = row_indices_by.remove(&name).unwrap();
 
-            let summary_rows: Vec<SummaryRow> = view
+            // `groups => [...]` restricts which group values get summary
+            // rows. When set and this group's name is not in the list,
+            // emit an empty summary_rows vec.
+            let group_in_filter = match &view.groups_filter {
+                Some(filter) => filter.iter().any(|g| g.eq_ignore_ascii_case(&name)),
+                None => true,
+            };
+
+            let summary_rows: Vec<SummaryRow> = if !group_in_filter {
+                Vec::new()
+            } else {
+                view
                 .aggregates
                 .iter()
                 .enumerate()
@@ -1287,7 +1326,8 @@ fn build_row_groups(
 
                     SummaryRow { label, cells }
                 })
-                .collect();
+                .collect()
+            };
 
             RowGroup {
                 name,
@@ -1296,7 +1336,8 @@ fn build_row_groups(
                 summary_side: view.side.clone(),
             }
         })
-        .collect()
+        .collect();
+    Ok(rg)
 }
 
 // ============================================================================

@@ -1,0 +1,18 @@
+-- This example MUST error: it lists 'Antarctica' in `groups => [...]`
+-- but no row has that region. Run with:
+--   ./target/debug/ggsql run examples/tabulate/45_facet_groups_error.ggsql
+-- and the expected output is a clean diagnostic of the form:
+--   Failed to execute TABULATE query: Parse error: FACET groups:
+--     'Antarctica' is not a value of grouping column 'region'
+SELECT * FROM (VALUES
+  ('North', 'Q1', 120),
+  ('South', 'Q1',  95),
+  ('East',  'Q1',  78),
+  ('West',  'Q1', 132)
+) AS sales(region, quarter, amount)
+TABULATE quarter, amount
+FACET region
+  SETTING target    => (amount),
+          aggregate => ('sum'),
+          groups    => ['North', 'Antarctica'],
+          label     => 'Sum'

@@ -99,3 +99,5 @@ a browser:
 | [`41_forced_sign_growth.ggsql`](41_forced_sign_growth.ggsql) | `{:num +.1f}%` — forced-sign percent (positives `+`, negatives Unicode `−`) |
 | [`42_comprehensive_report.ggsql`](42_comprehensive_report.ggsql) | Integration: SQL CTE → header + spanner + per-column formats + SCALE + HIGHLIGHT + FACET summary, end-to-end |
 | [`43_raw_passthrough.ggsql`](43_raw_passthrough.ggsql) | `RENAMING * => '${} USD'` — raw `{}` passthrough with literal prefix/suffix; no formatter applied |
+| [`44_facet_groups_restrict.ggsql`](44_facet_groups_restrict.ggsql) | `FACET … SETTING groups => ['North', 'South']` — restrict summary rows to specific group values |
+| [`45_facet_groups_error.ggsql`](45_facet_groups_error.ggsql) | **Negative test** — naming a non-existent group in `groups => [...]` errors at execute time with `FACET groups: '<name>' is not a value of grouping column '<col>'`. Files ending in `_error` are handled specially by `run.sh`, which captures the diagnostic and embeds it in the index. |
