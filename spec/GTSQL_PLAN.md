@@ -151,6 +151,8 @@ The `SETTING` subclause on `FORMAT` controls display properties:
 - `hide => true/false` — hide column from display (maps to `cols_hide()`)
 - `locale => 'string'` — locale for this column's formatting (e.g., `'fr'`, `'ja'`, `'pt-BR'`); controls number/date rendering in `RENAMING` (maps to `locale` param in `fmt_*()` calls for this column)
 
+> To annotate a column header with a unit, put it in the `LABEL <col> => '<text>'` text (e.g. `LABEL land_area => 'Land Area (km²)'`). There is no `units` SETTING.
+
 **Example:**
 ```sql
 -- Designate stub column

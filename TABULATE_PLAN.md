@@ -84,10 +84,9 @@ FORMAT [SPAN | STUB] <col> [, <col>...] [AS <id>]
 | `align`   | string  | `cols_align()` (`left`/`center`/`right`/`auto`) | 10 |
 | `hide`    | bool    | `cols_hide()`                       | 9       |
 | `locale`  | string  | per-column locale for formatters    | 21      |
-| `units`   | string  | column units, rendered in header (`{{km^2}}`, etc.) | 32 |
 
-> `units` is **not** in the GTSQL_PLAN.md prose but is used by fixture 32 —
-> implement it.
+> To put a unit in a column header, set `LABEL <col> => 'Label (km²)'`.
+> There is no `units` SETTING.
 
 #### `FORMAT ... RENAMING` LHS
 
@@ -355,12 +354,9 @@ Phase order is mandatory. One feature branch per phase
   computes summary rows with named aggregates.
 - Multi-aggregate produces multiple summary rows in `label` order.
 
-### Phase 10 — title case, units, forced sign (fixtures 31, 32, 33)
+### Phase 10 — title case, forced sign (fixtures 31, 33)
 
 - `{:Title}` (plus `{:UPPER}`, `{:lower}`) case transforms.
-- `FORMAT ... SETTING units => '<s>'` renders units in the column header
-  (gt's `cols_units` semantics — inspect fixture 32 expected HTML for the
-  exact markup, likely `<span class="gt_units">`).
 - `{:num %+.1f}` forced-sign already done in phase 5; fixture 33 is the
   acceptance test for it.
 
@@ -391,20 +387,17 @@ implementation choices the spec does not pin down.
    particular `%d` and `%I` render unpadded to match gt's named styles
    (`date_style`, `time_style`). See §2.2 “Implementation note
    (day/hour padding)”.
-4. **`SETTING units` exists on `FORMAT`** (spec example 32). Rendered in
-   the column header per gt's `cols_units` semantics (inspect spec
-   example 32 R code or captured HTML for exact markup).
-5. **`AS` inside `TABULATE` is a column rename, not a display label.**
+4. **`AS` inside `TABULATE` is a column rename, not a display label.**
    Display text belongs to `LABEL` (spec open-question 3).
-6. **`AS <id>` after `FORMAT SPAN` is always a bareword.** Quoted strings
+5. **`AS <id>` after `FORMAT SPAN` is always a bareword.** Quoted strings
    are a parse error. The bareword is the default display label and the
    reference used by `LABEL` and nested `FORMAT SPAN`.
-7. **No global locale.** `locale` only via `FORMAT ... SETTING locale =>
+6. **No global locale.** `locale` only via `FORMAT ... SETTING locale =>
    '...'` per column (spec open-question 6).
-8. **Named palettes from day one.** `TO viridis`, `TO RdYlGn` — reuse the
+7. **Named palettes from day one.** `TO viridis`, `TO RdYlGn` — reuse the
    VISUALISE palette catalogue (spec open-question 7). Spec examples 22
    and 24 require this in phase 7.
-9. **Captured fixtures use this repo's canonical syntax.** Every
+8. **Captured fixtures use this repo's canonical syntax.** Every
    `tests/fixtures/*/query.ggsql` uses the bare `{:num <body>}` form
    (no `%`) and gt-compatible strftime (`%d`, `%I`). No re-capture is
    needed when starting phases that touch the formatter mini-language.
