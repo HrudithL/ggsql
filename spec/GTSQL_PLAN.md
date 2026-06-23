@@ -472,6 +472,15 @@ SCALE <aesthetic> [FROM (<min>, <max>)] TO (<val1>, <val2>) [VIA <transform>]
 same cell, the clause appearing **later in the query wins** — the
 later style overrides the earlier per-property.
 
+**SCALE vs HIGHLIGHT — when to use which.** Use `SCALE` (optionally with
+`FILTER`) for *continuous* data-driven styling that interpolates a
+domain over a palette of values — a heatmap-style colour ramp, a
+font-size gradient, an opacity ramp. Use `HIGHLIGHT` for *categorical*
+or *predicate-driven* styling that applies a fixed style to cells where
+a boolean condition holds. The later-wins rule above applies uniformly
+to SCALE-vs-SCALE, HIGHLIGHT-vs-HIGHLIGHT, and SCALE-vs-HIGHLIGHT
+conflicts.
+
 **Examples:**
 ```sql
 -- Color scale with explicit domain

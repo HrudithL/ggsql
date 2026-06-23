@@ -252,6 +252,11 @@ SCALE <aesthetic> [FROM (<min>, <max>)] TO (<v1>, <v2>) | TO <palette> [VIA <tra
 - **Conflict resolution.** When two `SCALE` clauses (or a `SCALE` and a
   `HIGHLIGHT`) write the same CSS property on the same cell, the clause
   appearing later in the query wins.
+- **SCALE vs HIGHLIGHT.** `SCALE` is for continuous, data-driven styling
+  that interpolates a domain over a palette. `HIGHLIGHT` is for
+  categorical / predicate-driven styling that applies a fixed style.
+  The later-wins rule is uniform across SCALE-vs-SCALE,
+  HIGHLIGHT-vs-HIGHLIGHT, and SCALE-vs-HIGHLIGHT conflicts.
 
 ### 2.5 `HIGHLIGHT`
 
