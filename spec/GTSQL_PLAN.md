@@ -210,6 +210,7 @@ FORMAT <column>, ...
 
 **Time formatter (`{:time ...}`)** — the text between `{:time ` and `}` is a literal `strftime(3)` format string and is rendered as-is (with locale applied per `SETTING locale`).
 
+**Single-quote escape.** A RHS template is a single-quoted string. The only way to embed a literal `'` (apostrophe) inside that string is the escape `\'`. The SQL-standard doubled-quote form `''` is **not** accepted by the ggsql grammar. So a thousands-separated integer is written `'{:num %\'d}'`, currency with thousands separators and two decimals is `'${:num %\'.2f}'`, and `'Ontario\'s'` is the only spelling for a literal apostrophe inside a string.
 
 **Right-hand side (RHS) — string interpolation with formatters (ggsql-native):**
 - `'{}'` — insert value as-is
