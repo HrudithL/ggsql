@@ -109,10 +109,10 @@ pub struct ColMeta {
     /// must not be HTML-escaped by the renderer.
     pub raw_html: bool,
     /// Units string from `FORMAT <col> SETTING units => '<u>'`. When
-    /// present, the column header renders `<derived-label> <units-html>`
+    /// present, the column header renders `<label> <units-html>`
     /// where `units-html` wraps any `^N` segment in a gt-style
-    /// `<sup>` span. The derived label drops the column name's trailing
-    /// `_<tok>` suffix and title-cases the remaining `_`-separated words.
+    /// `<sup>` span. The label is the column name (or whatever the
+    /// user provides via `LABEL <col> => '...'`).
     pub units: Option<String>,
 }
 
@@ -463,16 +463,6 @@ fn build_table_ir(
                 col_name.to_string()
             };
             let units = units_overrides.get(&col_name.to_ascii_lowercase()).cloned();
-            // With `units` set and no explicit LABEL, derive a tidy header
-            // label from the column name (drop the trailing `_<tok>`
-            // suffix that typically encodes the units / year, then
-            // title-case the remaining `_`-separated words).
-            if units.is_some()
-                && !label_map.contains_key(&col_name.to_ascii_lowercase())
-                && !is_stub
-            {
-                label = derive_units_label(col_name);
-            }
             if let Some(s) = label_map.get(&col_name.to_ascii_lowercase()) {
                 label = s.clone();
             }
@@ -1431,27 +1421,6 @@ fn sql_portion_is_cte_only(sql_portion: &tree_sitter::Node<'_>) -> bool {
 /// Prefix for synthetic boolean projection columns added by `build_sql` when
 /// the query has `HIGHLIGHT` clauses.
 pub(crate) const HL_COL_PREFIX: &str = "__hl_";
-
-/// Derive a tidy display label for a column carrying a `SETTING units => ...`
-/// override. Drops the trailing `_<tok>` suffix (typically `_km2`,
-/// `_2021`, ...) and title-cases the remaining `_`-separated words.
-/// `density_2021` → `Density`; `land_area_km2` → `Land Area`.
-pub(crate) fn derive_units_label(col_name: &str) -> String {
-    let base = match col_name.rsplit_once('_') {
-        Some((head, _)) if !head.is_empty() => head,
-        _ => col_name,
-    };
-    base.split('_')
-        .map(|w| {
-            let mut chars = w.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
 
 /// Render a `SETTING units => '<s>'` value as gt-style HTML: a `^N`
 /// segment becomes a no-wrap `<span><sup>N</sup></span>` and the rest

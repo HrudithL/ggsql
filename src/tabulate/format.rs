@@ -1,20 +1,27 @@
 //! Cell formatters for `FORMAT ... RENAMING * => '<spec>'`.
 //!
-//! Two mini-languages live inside a single-quoted RHS string:
+//! The RHS is a literal template with a single `{...}` formatter span. Any
+//! text before or after the span is appended verbatim to every formatted
+//! cell — `'${:num \'d}abc'` formats the number with thousands separators
+//! then renders `${value}abc`. There is no special handling of `%`, `$`,
+//! or any other character; they are all literal.
+//!
+//! Two formatter mini-languages live inside the `{...}`:
 //!
 //! * `{:num <printf-body>}` — numeric formatter. The body is a printf
 //!   conversion specification *without* the leading `%` introducer (e.g.
-//!   `{:num \'d}`, `{:num .3f}`, `{:num .2e}`). A leading `%` is
-//!   rejected.
+//!   `{:num \'d}`, `{:num .3f}`, `{:num .2e}`). The only thousands flag is
+//!   `'` (written as `\'` inside the single-quoted RHS).
 //! * `{:time <strftime>}` — date / time formatter; strftime tokens are
 //!   gt-compatible: `%d`, `%I`, `%H`, `%M`, `%S` render unpadded to match
 //!   gt's named styles, matching the `%-d` / `%-I` GNU extensions used in
 //!   the captured fixtures.
 //!
-//! Plus three string-only case transforms:
+//! Plus three string-only case transforms (keyword case-insensitive,
+//! matching SQL — `{:title}` and `{:Title}` are equivalent):
 //!
-//! * `{:Title}` — title-case (first letter of each word).
-//! * `{:UPPER}` — all upper-case.
+//! * `{:title}` — title-case (first letter of each word).
+//! * `{:upper}` — all upper-case.
 //! * `{:lower}` — all lower-case.
 //!
 //! Per-column locale (`FORMAT … SETTING locale => 'fr'`) selects month and
@@ -27,7 +34,7 @@ pub type NumFn = Box<dyn Fn(Option<f64>) -> String + Send + Sync>;
 /// Boxed time formatter (string cell value → rendered string).
 pub type TimeFn = Box<dyn Fn(Option<&str>) -> String + Send + Sync>;
 /// Boxed string formatter (string cell value → rendered string).
-/// Used by case transforms (`{:Title}`, `{:UPPER}`, `{:lower}`).
+/// Used by case transforms (`{:title}`, `{:upper}`, `{:lower}`).
 pub type StringFn = Box<dyn Fn(Option<&str>) -> String + Send + Sync>;
 
 /// Formatter kind selected based on the RHS template.
@@ -58,7 +65,7 @@ pub fn build_format(rhs: &str, locale: Option<&str>) -> Option<(CellFmt, bool)> 
 }
 
 // ============================================================================
-// String / case transforms: `{:Title}`, `{:UPPER}`, `{:lower}`, `{}`
+// String / case transforms: `{:title}`, `{:upper}`, `{:lower}`, `{}`
 // with optional literal prefix / suffix.
 // ============================================================================
 
@@ -72,13 +79,20 @@ fn build_string_format(rhs: &str) -> Option<StringFn> {
 
     // Body is either empty (`{}`, identity) or `:<keyword>`. Numeric and
     // time bodies are handled by their dedicated builders above and won't
-    // reach here.
-    let kind = match body {
-        "" => StringTransform::Identity,
-        ":Title" => StringTransform::Title,
-        ":UPPER" => StringTransform::Upper,
-        ":lower" => StringTransform::Lower,
-        _ => return None,
+    // reach here. The keyword match is case-insensitive (`{:title}`,
+    // `{:Title}`, `{:TITLE}` are all equivalent), matching SQL keyword
+    // case-handling.
+    let kind = if body.is_empty() {
+        StringTransform::Identity
+    } else if let Some(kw) = body.strip_prefix(':') {
+        match kw.to_ascii_lowercase().as_str() {
+            "title" => StringTransform::Title,
+            "upper" => StringTransform::Upper,
+            "lower" => StringTransform::Lower,
+            _ => return None,
+        }
+    } else {
+        return None;
     };
 
     Some(Box::new(move |v: Option<&str>| -> String {
@@ -142,46 +156,20 @@ fn build_num_format(rhs: &str) -> Option<(NumFn, bool)> {
     let suffix = rhs[open + "{:num ".len() + close + 1..].to_string();
 
     let spec = NumSpec::parse(body)?;
-    // A literal `%` suffix outside the `{...}` triggers gt's percent
-    // semantics (×100 scaling). `%%` is treated as a single literal `%`.
-    let (suffix_clean, scale_pct) = parse_percent_suffix(&suffix);
     let raw_html = spec.conv == 'e';
 
     let render = move |v: Option<f64>| -> String {
         match v {
             None => "NA".to_string(),
             Some(x) if x.is_nan() => "NA".to_string(),
-            Some(mut x) => {
-                if scale_pct {
-                    x *= 100.0;
-                }
-                format!("{}{}{}", prefix, spec.render(x), suffix_clean)
-            }
+            Some(x) => format!("{}{}{}", prefix, spec.render(x), suffix),
         }
     };
     Some((Box::new(render), raw_html))
 }
 
-/// Detect a trailing literal `%` on the post-`{...}` suffix. The `%` stays
-/// in the suffix either way; the boolean signals to the caller that the
-/// numeric value should be multiplied by 100 first (`fmt_percent`
-/// semantics). A literal `%%` collapses to a single `%` and does NOT
-/// scale.
-fn parse_percent_suffix(suffix: &str) -> (String, bool) {
-    if let Some(stripped) = suffix.strip_suffix("%%") {
-        let mut s = stripped.to_string();
-        s.push('%');
-        (s, false)
-    } else if suffix.ends_with('%') {
-        (suffix.to_string(), true)
-    } else {
-        (suffix.to_string(), false)
-    }
-}
-
 struct NumSpec {
-    /// Locale-aware thousands separator. Set by either `'` (current spec)
-    /// or `,` (legacy capture).
+    /// Locale-aware thousands separator. Enabled by the `'` flag.
     thousands: bool,
     /// `+` flag — always print a sign.
     force_sign: bool,
@@ -205,7 +193,7 @@ impl NumSpec {
         loop {
             let c = s.chars().next()?;
             match c {
-                '\'' | ',' => {
+                '\'' => {
                     thousands = true;
                     s = &s[c.len_utf8()..];
                 }
@@ -665,9 +653,9 @@ mod tests {
         assert_eq!(num("{:num .3f}", 5550.0), "5550.000");
     }
     #[test]
-    fn num_legacy_thousands_int() {
-        assert_eq!(num("{:num ,d}", 5550.0), "5,550");
-        assert_eq!(num("{:num ,d}", 8_880_000.0), "8,880,000");
+    fn num_thousands_apostrophe_int() {
+        assert_eq!(num("{:num 'd}", 5550.0), "5,550");
+        assert_eq!(num("{:num 'd}", 8_880_000.0), "8,880,000");
     }
     #[test]
     fn num_thousands_apostrophe() {
@@ -675,23 +663,26 @@ mod tests {
     }
     #[test]
     fn num_currency_prefix() {
-        assert_eq!(num("${:num ,d}", 447_000.0), "$447,000");
+        assert_eq!(num("${:num 'd}", 447_000.0), "$447,000");
     }
     #[test]
-    fn num_percent_suffix_scales() {
-        assert_eq!(num("{:num .1f}%", 0.085), "8.5%");
+    fn num_percent_suffix_is_literal() {
+        // A trailing `%` is just an appended literal character — no
+        // scaling, no special handling.
+        assert_eq!(num("{:num .1f}%", 8.5), "8.5%");
+        assert_eq!(num("{:num .1f}%", 0.085), "0.1%");
     }
     #[test]
-    fn num_double_percent_no_scale() {
-        assert_eq!(num("{:num .1f}%%", 8.5), "8.5%");
+    fn num_arbitrary_suffix_is_literal() {
+        // Anything after the `{...}` is tacked on verbatim to each
+        // formatted number.
+        assert_eq!(num("{:num 'd}abc", 5550.0), "5,550abc");
+        assert_eq!(num("{:num .1f}%%", 8.5), "8.5%%");
     }
     #[test]
     fn num_forced_sign() {
-        assert_eq!(num("{:num +.1f}%", 0.085), "+8.5%");
-        // With force_sign set, negatives use the Unicode minus (U+2212)
-        // to align visual width with `+` — mirrors gt's
-        // `fmt_percent(force_sign = TRUE)`.
-        assert_eq!(num("{:num +.1f}%", -0.085), "\u{2212}8.5%");
+        assert_eq!(num("{:num +.1f}%", 8.5), "+8.5%");
+        assert_eq!(num("{:num +.1f}%", -8.5), "\u{2212}8.5%");
     }
     #[test]
     fn num_unforced_negative_is_ascii_minus() {

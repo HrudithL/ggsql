@@ -302,9 +302,9 @@ pub fn extract_sql_from_table(source: &SourceTree<'_>) -> Option<String> {
 
 /// Unquote a single-quoted string literal as produced by the grammar.
 ///
-/// Handles the SQL-style `''` doubled-quote escape and backslash escapes
-/// (`\n`, `\t`, `\r`, `\\`, `\'`, `\"`). Unknown `\x` escapes are kept
-/// verbatim.
+/// Handles backslash escapes (`\n`, `\t`, `\r`, `\\`, `\'`, `\"`). Unknown
+/// `\x` escapes are kept verbatim. There is no `''` doubled-quote escape;
+/// embed a single quote with `\'`.
 fn unquote_string(text: &str) -> String {
     let inner = text
         .strip_prefix('\'')
@@ -313,10 +313,7 @@ fn unquote_string(text: &str) -> String {
     let mut out = String::with_capacity(inner.len());
     let mut chars = inner.chars().peekable();
     while let Some(c) = chars.next() {
-        if c == '\'' && chars.peek() == Some(&'\'') {
-            chars.next();
-            out.push('\'');
-        } else if c == '\\' {
+        if c == '\\' {
             match chars.next() {
                 Some('n') => out.push('\n'),
                 Some('t') => out.push('\t'),

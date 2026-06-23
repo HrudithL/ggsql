@@ -1,3 +1,4 @@
-TABULATE region, growth_rate FROM growth
+SELECT region, growth_rate * 100 AS growth_rate FROM growth
+TABULATE region, growth_rate
 FORMAT growth_rate
   RENAMING * => '{:num +.1f}%'

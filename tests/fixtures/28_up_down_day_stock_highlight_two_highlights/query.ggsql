@@ -4,7 +4,7 @@ WHERE date BETWEEN '2015-12-01' AND '2015-12-15'
 
 TABULATE date, open, close
 FORMAT open, close
-  RENAMING * => '${:num ,.2f}'
+  RENAMING * => '${:num \'.2f}'
 HIGHLIGHT date, open, close
   FILTER close > open
   SETTING background => '#90EE90', face => 'bold'
