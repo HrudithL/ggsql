@@ -1,0 +1,20 @@
+-- `SCALE opacity FROM (lo, hi) TO ('<lo>', '<hi>')` modulates the
+-- alpha channel on the cell's background colour, mirroring gt's
+-- `cell_fill(alpha = ...)`. The opacity stops are numbers between 0
+-- (transparent) and 1 (opaque), written as strings.
+--
+-- Compose with `SCALE background`: the background colour comes from
+-- the first scale, the alpha from the second; the cell renders as
+-- `background-color: rgba(r, g, b, a);`.
+SELECT * FROM (VALUES
+  ('Item A',  10),
+  ('Item B',  40),
+  ('Item C',  70),
+  ('Item D', 100)
+) AS catalog(item, relevance)
+TABULATE item, relevance
+FORMAT STUB item
+SCALE background TO ('#0070D0', '#0070D0')
+  SETTING target => (relevance)
+SCALE opacity FROM (0, 100) TO ('0.2', '1.0')
+  SETTING target => (relevance)

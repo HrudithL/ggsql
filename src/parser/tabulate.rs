@@ -129,11 +129,17 @@ fn parse_format_clause(
     // --- column names + optional span_id ---
     // Columns are direct identifier children up to (but not including) the one
     // captured by the `span_id` field. Settings/renamings are in their own blocks.
+    // `FORMAT *` (the wildcard branch in the grammar) is represented as a
+    // single column "*"; the executor expands it to every visible column.
     let span_id_node = node.child_by_field_name("span_id");
     let span_id: Option<String> = span_id_node.map(|n| source.get_text(&n));
 
+    let has_wildcard = !source.find_nodes(node, "(format_wildcard) @w").is_empty();
+
     let mut columns: Vec<String> = Vec::new();
-    {
+    if has_wildcard {
+        columns.push("*".to_string());
+    } else {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "identifier" {

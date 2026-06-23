@@ -1,0 +1,14 @@
+-- `HIGHLIGHT … SETTING size => '<css length>'` bumps the cell's font
+-- size when the FILTER matches. Useful for drawing the eye to a row
+-- that needs attention without a colour change.
+SELECT * FROM (VALUES
+  ('Alpha',    42),
+  ('Bravo',    91),
+  ('Charlie', 100),
+  ('Delta',    37)
+) AS scores(team, points)
+TABULATE team, points
+FORMAT STUB team
+HIGHLIGHT team, points
+  FILTER points >= 90
+  SETTING size => '20px', face => 'bold'

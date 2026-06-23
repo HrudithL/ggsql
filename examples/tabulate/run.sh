@@ -63,14 +63,24 @@ for query in "$EXAMPLES_DIR"/*.ggsql; do
   name=$(basename "$query" .ggsql)
   html_path="$OUT_DIR/$name.html"
   echo "  $name.ggsql -> out/$name.html"
-  "$BIN" run "$query" --output "$html_path"
+
+  # Examples whose name ends in `_error` are negative tests: they should
+  # produce a parse-/execute-time error. Capture stderr so the diagnostic
+  # is what we embed in the index, and don't abort the loop on failure.
+  if [[ "$name" == *_error ]]; then
+    err_msg=$("$BIN" run "$query" 2>&1 >/dev/null) || true
+    table_html="<pre style=\"color:#a00;background:#fee;padding:.75rem;border-radius:6px;\">$(python3 -c 'import sys, html; sys.stdout.write(html.escape(sys.stdin.read()))' <<<"$err_msg")</pre>"
+    : >"$html_path"  # touch an empty stand-alone file for the index link
+  else
+    "$BIN" run "$query" --output "$html_path"
+    table_html=$(cat "$html_path")
+  fi
 
   # Escape the query for safe embedding in <pre>.
   q_escaped=$(python3 -c '
 import sys, html
 sys.stdout.write(html.escape(open(sys.argv[1]).read()))
 ' "$query")
-  table_html=$(cat "$html_path")
 
   {
     printf '<section id="%s">\n' "$name"

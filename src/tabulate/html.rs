@@ -410,6 +410,9 @@ pub fn render(table: &TableIr) -> String {
     if table.groups.is_empty() {
         for (row_idx, row) in table.rows.iter().enumerate() {
             let bg_row = table.cell_bg.get(row_idx).map(|v| v.as_slice());
+            let fg_row = table.cell_fg.get(row_idx).map(|v| v.as_slice());
+            let size_row = table.cell_size.get(row_idx).map(|v| v.as_slice());
+            let opacity_row = table.cell_opacity.get(row_idx).map(|v| v.as_slice());
             let style_row = table.cell_style.get(row_idx).map(|v| v.as_slice());
             out.push_str(&render_tr(
                 row,
@@ -417,6 +420,9 @@ pub fn render(table: &TableIr) -> String {
                 table.stub_col,
                 row_idx,
                 bg_row,
+                fg_row,
+                size_row,
+                opacity_row,
                 style_row,
                 None,
                 false,
@@ -458,6 +464,9 @@ pub fn render(table: &TableIr) -> String {
                 global_row += 1;
                 let row = &table.rows[row_idx];
                 let bg_row = table.cell_bg.get(row_idx).map(|v| v.as_slice());
+                let fg_row = table.cell_fg.get(row_idx).map(|v| v.as_slice());
+                let size_row = table.cell_size.get(row_idx).map(|v| v.as_slice());
+                let opacity_row = table.cell_opacity.get(row_idx).map(|v| v.as_slice());
                 let style_row = table.cell_style.get(row_idx).map(|v| v.as_slice());
                 out.push_str(&render_tr(
                     row,
@@ -465,6 +474,9 @@ pub fn render(table: &TableIr) -> String {
                     table.stub_col,
                     row_idx,
                     bg_row,
+                    fg_row,
+                    size_row,
+                    opacity_row,
                     style_row,
                     Some(group.name.as_str()),
                     j == 0,
@@ -736,6 +748,9 @@ fn render_tr(
     stub_col: Option<usize>,
     row_idx: usize,
     bg_row: Option<&[Option<String>]>,
+    fg_row: Option<&[Option<String>]>,
+    size_row: Option<&[Option<String>]>,
+    opacity_row: Option<&[Option<f32>]>,
     style_row: Option<&[CellStyle]>,
     group_name: Option<&str>,
     is_first_in_group: bool,
@@ -756,6 +771,9 @@ fn render_tr(
     let stub_id = stub_col.map(|_| format!("stub_1_{}", global_row_number));
     for (i, (value, col)) in row.iter().zip(columns.iter()).enumerate() {
         let bg = bg_row.and_then(|r| r.get(i)).and_then(|o| o.as_deref());
+        let fg = fg_row.and_then(|r| r.get(i)).and_then(|o| o.as_deref());
+        let scale_size = size_row.and_then(|r| r.get(i)).and_then(|o| o.as_deref());
+        let opacity = opacity_row.and_then(|r| r.get(i)).copied().flatten();
         let hl = style_row.and_then(|s| s.get(i));
         let cell = if Some(i) == stub_col {
             // Stub <th> in tbody. Alignment / numeric styling tracks the
@@ -818,22 +836,36 @@ fn render_tr(
             let (style_with_bg, bgcolor_attr) = match effective_bg {
                 Some(hex) => {
                     let attr = format!(" bgcolor=\"{}\"", hex);
+                    // SCALE opacity present and no HIGHLIGHT bg override
+                    // -> render the effective_bg as rgba(r,g,b,alpha)
+                    // (mirrors gt's `cell_fill(alpha = ...)`).
+                    let bg_decl = if hl_bg.is_none() {
+                        if let Some(alpha) = opacity {
+                            css_rgba(hex, alpha)
+                                .unwrap_or_else(|| format!("background-color: {};", hex))
+                        } else {
+                            format!("background-color: {};", hex)
+                        }
+                    } else {
+                        format!("background-color: {};", hex)
+                    };
                     if hl_bg.is_some() {
                         // HIGHLIGHT background: do not synthesize a
                         // foreground colour (gt's tab_style only sets
                         // what was asked for).
-                        (format!("{} background-color: {};", style, hex), attr)
-                    } else if hl_color.is_some() {
-                        // SCALE background present but a HIGHLIGHT will
-                        // override the text colour below; skip the
-                        // scale-derived `color:` declaration so the cell
-                        // ends up with a single `color:` value (matching
-                        // gt's rendered output).
-                        (format!("{} background-color: {};", style, hex), attr)
+                        (format!("{} {}", style, bg_decl), attr)
+                    } else if hl_color.is_some() || fg.is_some() {
+                        // SCALE background present but a HIGHLIGHT or
+                        // SCALE foreground will override the text colour
+                        // below; skip the scale-derived `color:`
+                        // declaration so the cell ends up with a single
+                        // `color:` value (matching gt's rendered
+                        // output).
+                        (format!("{} {}", style, bg_decl), attr)
                     } else {
-                        let fg = crate::tabulate::scale::ideal_fg(hex);
+                        let ideal = crate::tabulate::scale::ideal_fg(hex);
                         (
-                            format!("{} background-color: {}; color: {};", style, hex, fg),
+                            format!("{} {} color: {};", style, bg_decl, ideal),
                             attr,
                         )
                     }
@@ -841,6 +873,13 @@ fn render_tr(
                 None => (style, String::new()),
             };
             let mut style_final = style_with_bg;
+            // SCALE foreground -> color:, may be overridden by HIGHLIGHT
+            // color: below.
+            if hl_color.is_none() {
+                if let Some(fc) = fg {
+                    style_final.push_str(&format!(" color: {};", fc));
+                }
+            }
             if let Some(c) = hl_color {
                 style_final.push_str(&format!(" color: {};", c));
             }
@@ -851,6 +890,23 @@ fn render_tr(
                 };
                 style_final.push(' ');
                 style_final.push_str(&decl);
+            }
+            // SCALE size -> font-size:, may be overridden by HIGHLIGHT
+            // size: below.
+            if let Some(sz) = scale_size {
+                if hl.and_then(|h| h.size.as_deref()).is_none() {
+                    style_final.push_str(&format!(" font-size: {};", sz));
+                }
+            }
+            // HIGHLIGHT size/transform/decoration → matching CSS props.
+            if let Some(sz) = hl.and_then(|h| h.size.as_deref()) {
+                style_final.push_str(&format!(" font-size: {};", sz));
+            }
+            if let Some(t) = hl.and_then(|h| h.transform.as_deref()) {
+                style_final.push_str(&format!(" text-transform: {};", t));
+            }
+            if let Some(d) = hl.and_then(|h| h.decoration.as_deref()) {
+                style_final.push_str(&format!(" text-decoration: {};", d));
             }
             let headers = match (&group_name, &stub_id) {
                 (Some(g), Some(sid)) => format!("{} {} {}", g, sid, col.name),
@@ -980,4 +1036,22 @@ fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+/// Convert an uppercase `#RRGGBB` plus a 0..=1 alpha into a CSS
+/// `background-color: rgba(r, g, b, a);` declaration. Returns None if
+/// the hex doesn't parse.
+fn css_rgba(hex: &str, alpha: f32) -> Option<String> {
+    let s = hex.trim().strip_prefix('#')?;
+    if s.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&s[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&s[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&s[4..6], 16).ok()?;
+    let a = alpha.clamp(0.0, 1.0);
+    Some(format!(
+        "background-color: rgba({}, {}, {}, {:.3});",
+        r, g, b, a
+    ))
 }

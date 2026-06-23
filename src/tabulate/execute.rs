@@ -67,6 +67,20 @@ pub struct TableIr {
     /// HTML writer derives the contrasting foreground colour via
     /// [`super::scale::ideal_fg`].
     pub cell_bg: Vec<Vec<Option<String>>>,
+    /// Per-cell text colour from `SCALE foreground`. Same shape as
+    /// [`Self::rows`]. `None` for cells with no `SCALE foreground`. A
+    /// `Some(hex)` value sets the cell's CSS `color` property.
+    pub cell_fg: Vec<Vec<Option<String>>>,
+    /// Per-cell font-size from `SCALE size`. Same shape as
+    /// [`Self::rows`]. `None` for cells with no `SCALE size`. A
+    /// `Some(css)` value (e.g. `"14.5px"`) sets the cell's CSS
+    /// `font-size` property.
+    pub cell_size: Vec<Vec<Option<String>>>,
+    /// Per-cell opacity from `SCALE opacity` (range 0..=1). Same shape
+    /// as [`Self::rows`]. `None` for cells with no `SCALE opacity`.
+    /// When both a background colour and an opacity are set, the
+    /// renderer emits `background-color: rgba(r, g, b, a)`.
+    pub cell_opacity: Vec<Vec<Option<f32>>>,
     /// Per-cell style overrides from `HIGHLIGHT` clauses. Same shape as
     /// [`Self::rows`]. Empty `CellStyle` (all `None`) means no highlight
     /// applies. When multiple `HIGHLIGHT`s target the same cell, the
@@ -123,11 +137,24 @@ pub struct CellStyle {
     pub color: Option<String>,
     /// `face => 'bold' | 'italic' | 'normal'` (rendered verbatim).
     pub face: Option<String>,
+    /// `size => '<css length>'` (rendered verbatim into `font-size`).
+    pub size: Option<String>,
+    /// `transform => 'uppercase' | 'lowercase' | 'capitalize' | 'none'`
+    /// (rendered verbatim into `text-transform`).
+    pub transform: Option<String>,
+    /// `decoration => 'underline' | 'line-through' | 'overline' | 'none'`
+    /// (rendered verbatim into `text-decoration`).
+    pub decoration: Option<String>,
 }
 
 impl CellStyle {
     pub fn is_empty(&self) -> bool {
-        self.background.is_none() && self.color.is_none() && self.face.is_none()
+        self.background.is_none()
+            && self.color.is_none()
+            && self.face.is_none()
+            && self.size.is_none()
+            && self.transform.is_none()
+            && self.decoration.is_none()
     }
 }
 
@@ -396,6 +423,16 @@ fn build_table_ir(
         }
     }
 
+    // Resolve `FORMAT *` (wildcard) to the full set of visible column
+    // names. Non-wildcard column lists pass through unchanged.
+    let expand_cols = |cols: &[String]| -> Vec<String> {
+        if cols.iter().any(|c| c == "*") {
+            visible_cols.iter().map(|s| s.to_string()).collect()
+        } else {
+            cols.to_vec()
+        }
+    };
+
     // Per-column width / align overrides from `FORMAT <col> SETTING ...`.
     let mut width_overrides: HashMap<String, String> = HashMap::new();
     let mut align_overrides: HashMap<String, ColAlign> = HashMap::new();
@@ -406,7 +443,7 @@ fn build_table_ir(
         for s in &fc.settings {
             if s.key.eq_ignore_ascii_case("width") {
                 if let SettingValue::String(v) = &s.value {
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         width_overrides.insert(col.to_ascii_lowercase(), v.clone());
                     }
                 }
@@ -419,7 +456,7 @@ fn build_table_ir(
                         _ => None,
                     };
                     if let Some(a) = align {
-                        for col in &fc.columns {
+                        for col in &expand_cols(&fc.columns) {
                             align_overrides.insert(col.to_ascii_lowercase(), a);
                         }
                     }
@@ -519,7 +556,7 @@ fn build_table_ir(
         for s in &fc.settings {
             if s.key.eq_ignore_ascii_case("locale") {
                 if let SettingValue::String(v) = &s.value {
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         locale_overrides.insert(col.to_ascii_lowercase(), v.clone());
                     }
                 }
@@ -528,25 +565,25 @@ fn build_table_ir(
         for r in &fc.renamings {
             match &r.lhs {
                 RenamingLhs::Wildcard => {
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         format_overrides.insert(col.to_ascii_lowercase(), r.rhs.clone());
                     }
                 }
                 RenamingLhs::Null => {
                     let v = smart_text(&r.rhs);
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         null_subst.insert(col.to_ascii_lowercase(), v.clone());
                     }
                 }
                 RenamingLhs::Zero => {
                     let v = smart_text(&r.rhs);
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         zero_subst.insert(col.to_ascii_lowercase(), v.clone());
                     }
                 }
                 RenamingLhs::Number(n) => {
                     let v = smart_text(&r.rhs);
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         numeric_substs
                             .entry(col.to_ascii_lowercase())
                             .or_default()
@@ -555,7 +592,7 @@ fn build_table_ir(
                 }
                 RenamingLhs::Literal(lit) => {
                     let v = smart_text(&r.rhs);
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         literal_substs
                             .entry(col.to_ascii_lowercase())
                             .or_default()
@@ -746,16 +783,20 @@ fn build_table_ir(
 
     let header_forest = build_header_forest(tab_stmt, &columns, &label_map);
 
-    let cell_bg = build_cell_bg(tab_stmt, &columns, combined);
+    let (cell_bg, cell_fg, cell_size, cell_opacity) =
+        build_cell_scale(tab_stmt, &columns, combined);
     let cell_style = build_cell_style(tab_stmt, &columns, combined);
 
     // Compute row groups + summary rows from the FACET clause.
-    let groups = build_row_groups(tab_stmt, &columns, stub_col_idx, combined);
+    let groups = build_row_groups(tab_stmt, &columns, stub_col_idx, combined)?;
 
     Ok(TableIr {
         columns,
         rows,
         cell_bg,
+        cell_fg,
+        cell_size,
+        cell_opacity,
         cell_style,
         groups,
         title,
@@ -849,27 +890,40 @@ fn build_header_forest(
     nodes
 }
 
-/// Compute the per-cell background-colour matrix from any `SCALE background`
-/// clauses in `tab_stmt`. Returns a matrix the same shape as `TableIr::rows`,
-/// where `None` means no scale applies to that cell and `Some(hex)` is the
-/// resolved uppercase 6-digit colour. If multiple scales target the same
-/// column the later clause wins (matching gt's last-writer-wins semantics).
-fn build_cell_bg(
+/// Compute the per-cell SCALE matrices for any `SCALE <aesthetic>`
+/// clauses in `tab_stmt`. Returns four parallel matrices the same shape
+/// as `TableIr::rows`:
+///
+/// * background colour (`SCALE background` → uppercase `#RRGGBB`)
+/// * foreground / text colour (`SCALE foreground` → uppercase `#RRGGBB`)
+/// * font-size CSS string (`SCALE size` → e.g. `"14.50px"`)
+/// * opacity 0..=1 (`SCALE opacity` → f32)
+///
+/// When multiple SCALE clauses target the same cell + aesthetic the
+/// later clause wins (matching gt's last-writer-wins semantics).
+#[allow(clippy::type_complexity)]
+fn build_cell_scale(
     tab_stmt: &TabulateStmt,
     columns: &[ColMeta],
     combined: &RecordBatch,
-) -> Vec<Vec<Option<String>>> {
+) -> (
+    Vec<Vec<Option<String>>>,
+    Vec<Vec<Option<String>>>,
+    Vec<Vec<Option<String>>>,
+    Vec<Vec<Option<f32>>>,
+) {
     use crate::tabulate::scale::{map_value, resolve_stops};
     let nrows = combined.num_rows();
     let ncols = columns.len();
-    let mut out: Vec<Vec<Option<String>>> = (0..nrows).map(|_| vec![None; ncols]).collect();
+    let mut bg: Vec<Vec<Option<String>>> = (0..nrows).map(|_| vec![None; ncols]).collect();
+    let mut fg: Vec<Vec<Option<String>>> = (0..nrows).map(|_| vec![None; ncols]).collect();
+    let mut sz: Vec<Vec<Option<String>>> = (0..nrows).map(|_| vec![None; ncols]).collect();
+    let mut op: Vec<Vec<Option<f32>>> = (0..nrows).map(|_| vec![None; ncols]).collect();
 
     for sc in &tab_stmt.scale_clauses {
-        if !sc.aesthetic.eq_ignore_ascii_case("background") {
-            continue;
-        }
+        let aesthetic = sc.aesthetic.to_ascii_lowercase();
         let stops = resolve_stops(&sc.palette);
-        if stops.is_empty() {
+        if stops.is_empty() && !matches!(aesthetic.as_str(), "size" | "opacity") {
             continue;
         }
         let transform = sc.transform.as_deref();
@@ -910,13 +964,133 @@ fn build_cell_bg(
                 }
             };
 
-            for (row_idx, row_cells) in out.iter_mut().enumerate().take(nrows) {
-                let v = numeric_to_f64(arr, row_idx);
-                row_cells[col_idx] = Some(map_value(v, domain, &stops, transform));
+            match aesthetic.as_str() {
+                "background" => {
+                    for (row_idx, row_cells) in bg.iter_mut().enumerate().take(nrows) {
+                        let v = numeric_to_f64(arr, row_idx);
+                        row_cells[col_idx] = Some(map_value(v, domain, &stops, transform));
+                    }
+                }
+                "foreground" | "color" => {
+                    for (row_idx, row_cells) in fg.iter_mut().enumerate().take(nrows) {
+                        let v = numeric_to_f64(arr, row_idx);
+                        row_cells[col_idx] = Some(map_value(v, domain, &stops, transform));
+                    }
+                }
+                "size" => {
+                    // For `size`, the TO stops are CSS length strings
+                    // (e.g. `'12px'`, `'28px'`). Parse to numeric px and
+                    // interpolate linearly between adjacent stops via
+                    // the normalized t = (v - lo) / (hi - lo).
+                    let px_stops: Vec<f32> = match &sc.palette {
+                        crate::tabulate::ast::ScalePalette::Stops(s) => {
+                            s.iter().map(|s| parse_css_length_px(s)).collect()
+                        }
+                        crate::tabulate::ast::ScalePalette::Named(_) => continue,
+                    };
+                    if px_stops.len() < 2 {
+                        continue;
+                    }
+                    for (row_idx, row_cells) in sz.iter_mut().enumerate().take(nrows) {
+                        let Some(v) = numeric_to_f64(arr, row_idx) else {
+                            continue;
+                        };
+                        if !v.is_finite() {
+                            continue;
+                        }
+                        let t = scale_t(v, domain.0, domain.1, transform);
+                        let interp = interp_f32(&px_stops, t);
+                        row_cells[col_idx] = Some(format!("{:.2}px", interp));
+                    }
+                }
+                "opacity" => {
+                    // Opacity stops are numbers in [0, 1]. The grammar
+                    // currently parses them as strings; try f32.
+                    let num_stops: Vec<f32> = match &sc.palette {
+                        crate::tabulate::ast::ScalePalette::Stops(s) => s
+                            .iter()
+                            .filter_map(|x| x.parse::<f32>().ok())
+                            .collect(),
+                        crate::tabulate::ast::ScalePalette::Named(_) => continue,
+                    };
+                    if num_stops.len() < 2 {
+                        continue;
+                    }
+                    for (row_idx, row_cells) in op.iter_mut().enumerate().take(nrows) {
+                        let Some(v) = numeric_to_f64(arr, row_idx) else {
+                            continue;
+                        };
+                        if !v.is_finite() {
+                            continue;
+                        }
+                        let t = scale_t(v, domain.0, domain.1, transform);
+                        row_cells[col_idx] = Some(interp_f32(&num_stops, t).clamp(0.0, 1.0));
+                    }
+                }
+                _ => {}
             }
         }
     }
-    out
+    (bg, fg, sz, op)
+}
+
+/// Parse a CSS length string into pixels. Recognises `'12px'`, `'1.5em'`
+/// (16px), `'small'` / `'medium'` / `'large'` keywords. Falls back to
+/// 16.0 on parse failure.
+fn parse_css_length_px(s: &str) -> f32 {
+    let s = s.trim();
+    let kw = s.to_ascii_lowercase();
+    match kw.as_str() {
+        "xx-small" => return 9.0,
+        "x-small" => return 10.0,
+        "small" => return 13.0,
+        "medium" => return 16.0,
+        "large" => return 18.0,
+        "x-large" => return 24.0,
+        "xx-large" => return 32.0,
+        _ => {}
+    }
+    if let Some(num) = s.strip_suffix("px") {
+        return num.trim().parse::<f32>().unwrap_or(16.0);
+    }
+    if let Some(num) = s.strip_suffix("em") {
+        return num.trim().parse::<f32>().unwrap_or(1.0) * 16.0;
+    }
+    if let Some(num) = s.strip_suffix("rem") {
+        return num.trim().parse::<f32>().unwrap_or(1.0) * 16.0;
+    }
+    s.parse::<f32>().unwrap_or(16.0)
+}
+
+/// Normalize `v` into [0, 1] across `[lo, hi]`, optionally log10-warped
+/// to match `SCALE … VIA log10`.
+fn scale_t(v: f64, lo: f64, hi: f64, transform: Option<&str>) -> f32 {
+    let (v_t, lo_t, hi_t) = match transform {
+        Some(t) if t.eq_ignore_ascii_case("log10") => {
+            let logz = |x: f64| if x <= 0.0 { 0.0 } else { x.log10() };
+            (logz(v), logz(lo), logz(hi))
+        }
+        _ => (v, lo, hi),
+    };
+    if hi_t <= lo_t {
+        return 0.0;
+    }
+    (((v_t - lo_t) / (hi_t - lo_t)).clamp(0.0, 1.0)) as f32
+}
+
+/// Piecewise-linear interpolation between adjacent stops at parameter
+/// `t` in [0, 1].
+fn interp_f32(stops: &[f32], t: f32) -> f32 {
+    debug_assert!(!stops.is_empty());
+    if stops.len() == 1 {
+        return stops[0];
+    }
+    let t = t.clamp(0.0, 1.0);
+    let n = stops.len() - 1;
+    let seg_f = t * n as f32;
+    let seg = (seg_f.floor() as usize).min(n - 1);
+    let sub_t = seg_f - seg as f32;
+    stops[seg] * (1.0 - sub_t) + stops[seg + 1] * sub_t
 }
 
 /// Build the per-cell highlight-style matrix from `HIGHLIGHT` clauses.
@@ -967,6 +1141,9 @@ fn build_cell_style(
         let mut bg: Option<String> = None;
         let mut color: Option<String> = None;
         let mut face: Option<String> = None;
+        let mut size: Option<String> = None;
+        let mut transform: Option<String> = None;
+        let mut decoration: Option<String> = None;
         for s in &hl.settings {
             let val = match &s.value {
                 crate::tabulate::ast::SettingValue::String(v) => v.clone(),
@@ -977,6 +1154,9 @@ fn build_cell_style(
                 "background" => bg = Some(crate::tabulate::scale::parse_to_hex_upper(&val)),
                 "color" => color = Some(crate::tabulate::scale::parse_to_hex_upper(&val)),
                 "face" => face = Some(val),
+                "size" => size = Some(val),
+                "transform" => transform = Some(val),
+                "decoration" => decoration = Some(val),
                 _ => {}
             }
         }
@@ -1000,6 +1180,15 @@ fn build_cell_style(
                 if let Some(f) = &face {
                     cs.face = Some(f.clone());
                 }
+                if let Some(s) = &size {
+                    cs.size = Some(s.clone());
+                }
+                if let Some(t) = &transform {
+                    cs.transform = Some(t.clone());
+                }
+                if let Some(d) = &decoration {
+                    cs.decoration = Some(d.clone());
+                }
             }
         }
     }
@@ -1017,6 +1206,11 @@ struct FacetView {
     /// When set, summary values are rendered via this format instead of
     /// the default `formatC(format="f", digits=K)` per-column max-K.
     fmt: Option<String>,
+    /// Optional restriction on which group values get summary rows.
+    /// `None` -> every group receives summaries. `Some(list)` ->
+    /// only the listed groups (matched case-insensitively against the
+    /// rendered group-name).
+    groups_filter: Option<Vec<String>>,
 }
 
 impl FacetView {
@@ -1027,6 +1221,7 @@ impl FacetView {
             labels: Vec::new(),
             side: "bottom".to_string(),
             fmt: None,
+            groups_filter: None,
         };
         for s in settings {
             match s.key.to_ascii_lowercase().as_str() {
@@ -1067,6 +1262,15 @@ impl FacetView {
                 "fmt" => {
                     view.fmt = match &s.value {
                         FacetValue::String(v) => Some(v.clone()),
+                        _ => None,
+                    }
+                }
+                "groups" => {
+                    view.groups_filter = match &s.value {
+                        FacetValue::StrList(v) => Some(v.clone()),
+                        FacetValue::IdentList(v) => Some(v.clone()),
+                        FacetValue::String(v) => Some(vec![v.clone()]),
+                        FacetValue::Identifier(v) => Some(vec![v.clone()]),
                         _ => None,
                     }
                 }
@@ -1154,15 +1358,15 @@ fn build_row_groups(
     columns: &[ColMeta],
     stub_col_idx: Option<usize>,
     combined: &RecordBatch,
-) -> Vec<RowGroup> {
+) -> Result<Vec<RowGroup>> {
     let Some(facet) = &tab_stmt.facet else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let nrows = combined.num_rows();
     let schema = combined.schema();
     let group_idx = match schema.index_of(&facet.group_col) {
         Ok(i) => i,
-        Err(_) => return Vec::new(),
+        Err(_) => return Ok(Vec::new()),
     };
     let group_arr = combined.column(group_idx);
 
@@ -1180,6 +1384,19 @@ fn build_row_groups(
     }
 
     let view = FacetView::from_settings(&facet.settings);
+
+    // Validate `groups => [...]`: every named group must exist in the
+    // data. Unknown names are a hard error.
+    if let Some(filter) = &view.groups_filter {
+        for g in filter {
+            if !order.iter().any(|name| name.eq_ignore_ascii_case(g)) {
+                return Err(GgsqlError::ParseError(format!(
+                    "FACET groups: '{}' is not a value of grouping column '{}'",
+                    g, facet.group_col
+                )));
+            }
+        }
+    }
 
     // Map target column names → column index in `columns` for cell placement.
     let target_idxs: Vec<(String, usize)> = view
@@ -1240,12 +1457,23 @@ fn build_row_groups(
         })
     });
 
-    order
+    let rg: Vec<RowGroup> = order
         .into_iter()
         .map(|name| {
             let row_indices = row_indices_by.remove(&name).unwrap();
 
-            let summary_rows: Vec<SummaryRow> = view
+            // `groups => [...]` restricts which group values get summary
+            // rows. When set and this group's name is not in the list,
+            // emit an empty summary_rows vec.
+            let group_in_filter = match &view.groups_filter {
+                Some(filter) => filter.iter().any(|g| g.eq_ignore_ascii_case(&name)),
+                None => true,
+            };
+
+            let summary_rows: Vec<SummaryRow> = if !group_in_filter {
+                Vec::new()
+            } else {
+                view
                 .aggregates
                 .iter()
                 .enumerate()
@@ -1287,7 +1515,8 @@ fn build_row_groups(
 
                     SummaryRow { label, cells }
                 })
-                .collect();
+                .collect()
+            };
 
             RowGroup {
                 name,
@@ -1296,7 +1525,8 @@ fn build_row_groups(
                 summary_side: view.side.clone(),
             }
         })
-        .collect()
+        .collect();
+    Ok(rg)
 }
 
 // ============================================================================
