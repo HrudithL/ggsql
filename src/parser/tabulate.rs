@@ -192,6 +192,14 @@ fn parse_setting_pair(
         .map(|n| source.get_text(&n))
         .ok_or_else(|| GgsqlError::ParseError("Missing key in FORMAT SETTING".to_string()))?;
 
+    if key.eq_ignore_ascii_case("units") {
+        return Err(GgsqlError::ParseError(
+            "FORMAT SETTING `units` was removed; put units in the LABEL text \
+             instead, e.g. LABEL land_area => 'Land Area (km²)'"
+                .to_string(),
+        ));
+    }
+
     let value = parse_setting_value(source, node)?;
     Ok(FormatSetting { key, value })
 }

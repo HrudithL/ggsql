@@ -95,7 +95,7 @@ a browser:
 | [`37_facet_multi_aggregate.ggsql`](37_facet_multi_aggregate.ggsql) | Multiple aggregates (`min`, `max`, `mean`) with custom `label` overrides |
 | [`38_case_title.ggsql`](38_case_title.ggsql) | `RENAMING * => '{:title}'` — title-case each cell (first letter of every word) |
 | [`39_case_upper_lower.ggsql`](39_case_upper_lower.ggsql) | `{:upper}` and `{:lower}` — normalise text to a single case |
-| [`40_units_in_header.ggsql`](40_units_in_header.ggsql) | `SETTING units => 'km^2'` — unit annotation in the column header (with `^N` superscript) |
+| [`40_unit_in_label.ggsql`](40_unit_in_label.ggsql) | Put a Unicode unit annotation in `LABEL <col> => 'Land Area (km²)'`. There is no separate `units` SETTING — anything beyond the column name belongs in LABEL. |
 | [`41_forced_sign_growth.ggsql`](41_forced_sign_growth.ggsql) | `{:num +.1f}%` — forced-sign percent (positives `+`, negatives Unicode `−`) |
 | [`42_comprehensive_report.ggsql`](42_comprehensive_report.ggsql) | Integration: SQL CTE → header + spanner + per-column formats + SCALE + HIGHLIGHT + FACET summary, end-to-end |
 | [`43_raw_passthrough.ggsql`](43_raw_passthrough.ggsql) | `RENAMING * => '${} USD'` — raw `{}` passthrough with literal prefix/suffix; no formatter applied |

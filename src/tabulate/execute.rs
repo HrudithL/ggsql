@@ -108,12 +108,6 @@ pub struct ColMeta {
     /// only set by the scientific-notation formatter `{:num %.Ne}`) and
     /// must not be HTML-escaped by the renderer.
     pub raw_html: bool,
-    /// Units string from `FORMAT <col> SETTING units => '<u>'`. When
-    /// present, the column header renders `<label> <units-html>`
-    /// where `units-html` wraps any `^N` segment in a gt-style
-    /// `<sup>` span. The label is the column name (or whatever the
-    /// user provides via `LABEL <col> => '...'`).
-    pub units: Option<String>,
 }
 
 /// Per-cell style overrides from `HIGHLIGHT` clauses.
@@ -405,7 +399,6 @@ fn build_table_ir(
     // Per-column width / align overrides from `FORMAT <col> SETTING ...`.
     let mut width_overrides: HashMap<String, String> = HashMap::new();
     let mut align_overrides: HashMap<String, ColAlign> = HashMap::new();
-    let mut units_overrides: HashMap<String, String> = HashMap::new();
     for fc in &tab_stmt.format_clauses {
         if fc.mode != FormatMode::None {
             continue;
@@ -429,12 +422,6 @@ fn build_table_ir(
                         for col in &fc.columns {
                             align_overrides.insert(col.to_ascii_lowercase(), a);
                         }
-                    }
-                }
-            } else if s.key.eq_ignore_ascii_case("units") {
-                if let SettingValue::String(v) = &s.value {
-                    for col in &fc.columns {
-                        units_overrides.insert(col.to_ascii_lowercase(), v.clone());
                     }
                 }
             }
@@ -462,7 +449,6 @@ fn build_table_ir(
             } else {
                 col_name.to_string()
             };
-            let units = units_overrides.get(&col_name.to_ascii_lowercase()).cloned();
             if let Some(s) = label_map.get(&col_name.to_ascii_lowercase()) {
                 label = s.clone();
             }
@@ -480,7 +466,6 @@ fn build_table_ir(
                 align,
                 width,
                 raw_html: false,
-                units,
             }
         })
         .collect();
@@ -508,7 +493,6 @@ fn build_table_ir(
                 align: ColAlign::Left,
                 width: None,
                 raw_html: false,
-                units: None,
             },
         );
         stub_col_idx = Some(0);
@@ -1421,35 +1405,6 @@ fn sql_portion_is_cte_only(sql_portion: &tree_sitter::Node<'_>) -> bool {
 /// Prefix for synthetic boolean projection columns added by `build_sql` when
 /// the query has `HIGHLIGHT` clauses.
 pub(crate) const HL_COL_PREFIX: &str = "__hl_";
-
-/// Render a `SETTING units => '<s>'` value as gt-style HTML: a `^N`
-/// segment becomes a no-wrap `<span><sup>N</sup></span>` and the rest
-/// stays as literal text. Used as a suffix after the column's label in
-/// the rendered `<th>`.
-pub(crate) fn render_units_html(units: &str) -> String {
-    let mut out = String::with_capacity(units.len());
-    let bytes = units.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'^' {
-            let start = i + 1;
-            let mut j = start;
-            while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'-') {
-                j += 1;
-            }
-            if j > start {
-                out.push_str("<span style=\"white-space:nowrap;\"><sup style=\"line-height:0;\">");
-                out.push_str(&units[start..j]);
-                out.push_str("</sup></span>");
-                i = j;
-                continue;
-            }
-        }
-        out.push(bytes[i] as char);
-        i += 1;
-    }
-    out
-}
 
 /// Determine alignment for a column given the original Arrow schema (if
 /// available — e.g. when reading directly from parquet) and the actual data
