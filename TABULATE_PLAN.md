@@ -33,6 +33,9 @@ A query is `SELECT ... TABULATE ... <clauses>*`. The SQL preamble is
 optional when `FROM` is given inside `TABULATE`. Six clauses can follow
 `TABULATE`, each in any order:
 
+- **VISUALISE and TABULATE are mutually exclusive in a single query.**
+  The parser rejects any query containing both.
+
 | Clause       | Repeatable | Subclauses               |
 | ------------ | ---------- | ------------------------ |
 | `FORMAT`     | yes        | `SETTING`, `RENAMING`    |
@@ -47,6 +50,27 @@ Grammar entry point: extend `tree-sitter-ggsql/grammar.js` `query` rule with
 ---
 
 ## 2. Syntax reference (fixture-accurate)
+
+### Reserved barewords
+
+The spec's \"Reserved barewords\" section lists every keyword that
+requires quoting when used as a column name. In short:
+
+- Top-level clause keywords: `TABULATE`, `FORMAT`, `FACET`, `SCALE`,
+  `HIGHLIGHT`, `LABEL`.
+- Subclause keywords: `SETTING`, `RENAMING`, `FILTER`, `FROM`.
+- Inline keywords inside a `FORMAT`: `STUB`, `SPAN`, `AS`.
+- Inline keywords inside `SCALE`: `TO`, `VIA`.
+- `LABEL`-only reserved keys: `title`, `subtitle`, `caption`.
+
+Inner `SETTING` keys (`target`, `aggregate`, `groups`, `side`, `label`,
+`missing_text`, `width`, `align`, `hide`, `locale`, `face`, `color`,
+`background`, `size`, `transform`, `decoration`, `foreground`,
+`opacity`) are **not** reserved and may freely be used as column names
+without quoting.
+
+To use a reserved bareword as a column name, quote it with double quotes
+(`"format"` for a column literally named `format`).
 
 ### 2.1 `TABULATE`
 
@@ -72,6 +96,8 @@ FORMAT [SPAN | STUB] <col> [, <col>...] [AS <id>]
     default display label; override via `LABEL <id> => '<text>'`.
   - Spanner IDs and column names share a namespace; nesting is done by
     listing spanner IDs in a later `FORMAT SPAN ... AS <parent>`.
+  - A spanner ID must not collide with an existing column name nor with
+    another spanner ID in the same query (parse-time error).
 - `STUB` — designate column(s) as the row-label stub (gt `rowname_col`).
 - Multiple columns may appear before `SETTING` / `RENAMING`; the subclauses
   apply to every listed column.
@@ -84,10 +110,13 @@ FORMAT [SPAN | STUB] <col> [, <col>...] [AS <id>]
 | `align`   | string  | `cols_align()` (`left`/`center`/`right`/`auto`) | 10 |
 | `hide`    | bool    | `cols_hide()`                       | 9       |
 | `locale`  | string  | per-column locale for formatters    | 21      |
-| `units`   | string  | column units, rendered in header (`{{km^2}}`, etc.) | 32 |
 
-> `units` is **not** in the GTSQL_PLAN.md prose but is used by fixture 32 —
-> implement it.
+> `align => 'auto'` (the default) follows gt's `cols_align(align='auto')`
+> rule: numeric / integer / date / time / datetime columns right-align,
+> character / factor columns left-align, and all other types center.
+>
+> To put a unit in a column header, set `LABEL <col> => 'Label (km²)'`.
+> There is no `units` SETTING.
 
 #### `FORMAT ... RENAMING` LHS
 
@@ -166,10 +195,13 @@ Examples from the corpus (spec syntax):
 
 ##### Case transforms
 
+Formatter keywords inside `{:...}` are ASCII-case-insensitive (matching
+SQL keyword handling); the lowercase form is canonical.
+
 | Spec        | Means       | Fixture |
 | ----------- | ----------- | ------- |
-| `{:Title}`  | title case  | 31      |
-| `{:UPPER}`  | upper       | —       |
+| `{:title}`  | title case  | 31      |
+| `{:upper}`  | upper       | —       |
 | `{:lower}`  | lower       | —       |
 | `{}`        | as-is       | —       |
 
@@ -188,9 +220,14 @@ FACET [<group_col>]
 - One `FACET` per query.
 - `<group_col>` optional. Present → `gt(groupname_col = ...)`. Absent →
   table-wide summary rows only.
-- `target` accepts a single bareword column or a parenthesized list. Mirrors
-  `SCALE ... SETTING target =>`.
-- `aggregate` functions: `'min'`, `'max'`, `'mean'`, `'median'`, `'sd'`, `'sum'`.
+- `target` accepts a parenthesized list (`(col)`, `(col1, col2)`). Mirrors
+  `SCALE ... SETTING target =>`. The bareword form `target => col` is no
+  longer accepted — wrap even single columns in parens.
+- `aggregate` functions: `'min'`, `'max'`, `'avg'`, `'median'`, `'sd'`, `'sum'`.
+  (`'mean'` is rejected — use `'avg'`.)
+- `groups => [v1, v2]` is optional. When omitted, every group of
+  `<group_col>` receives summaries. When supplied, only the listed group
+  values get summary rows; referencing a non-existent group is an error.
 - `label` is a single string for one aggregate, a list aligned to
   `aggregate` for multiple. Fixture 30/34 use `label => ['Min', 'Max', 'Avg']`.
 
@@ -208,9 +245,18 @@ SCALE <aesthetic> [FROM (<min>, <max>)] TO (<v1>, <v2>) | TO <palette> [VIA <tra
   names (fixtures use `viridis`, `RdYlGn`). Reuses the ggsql VISUALISE
   palette catalogue.
 - `VIA <transform>`: `log10`, `sqrt`, `reverse` (fixture 25 uses `log10`).
-- `target` is required. Single column or list.
+- `target` is required. Always a parenthesized list — `(col)` or
+  `(col1, col2, ...)`. The bareword `target => col` form is rejected.
 - `FILTER` is optional row-restriction using the same SQL-like expression
   language as `HIGHLIGHT ... FILTER`.
+- **Conflict resolution.** When two `SCALE` clauses (or a `SCALE` and a
+  `HIGHLIGHT`) write the same CSS property on the same cell, the clause
+  appearing later in the query wins.
+- **SCALE vs HIGHLIGHT.** `SCALE` is for continuous, data-driven styling
+  that interpolates a domain over a palette. `HIGHLIGHT` is for
+  categorical / predicate-driven styling that applies a fixed style.
+  The later-wins rule is uniform across SCALE-vs-SCALE,
+  HIGHLIGHT-vs-HIGHLIGHT, and SCALE-vs-HIGHLIGHT conflicts.
 
 ### 2.5 `HIGHLIGHT`
 
@@ -224,6 +270,13 @@ HIGHLIGHT <col> [, <col>...]
 - Multiple `HIGHLIGHT`s per query (fixture 28: up-day and down-day).
 - `SETTING` style keys: `face`, `color`, `background`, `size`, `transform`,
   `decoration`.
+- **Conflict resolution.** When two `HIGHLIGHT`s (or a `HIGHLIGHT` and a
+  `SCALE`) write the same CSS property on the same cell, the clause
+  appearing later in the query wins.
+- **Two HIGHLIGHTs vs one with OR.** Two `HIGHLIGHT`s with disjoint
+  filters and the same style produce the same output as one `HIGHLIGHT`
+  whose `FILTER` combines them with `OR`. Use separate `HIGHLIGHT`s for
+  per-predicate styles, one with `OR` for a shared style.
 
 ### 2.6 `LABEL`
 
@@ -355,12 +408,9 @@ Phase order is mandatory. One feature branch per phase
   computes summary rows with named aggregates.
 - Multi-aggregate produces multiple summary rows in `label` order.
 
-### Phase 10 — title case, units, forced sign (fixtures 31, 32, 33)
+### Phase 10 — title case, forced sign (fixtures 31, 33)
 
 - `{:Title}` (plus `{:UPPER}`, `{:lower}`) case transforms.
-- `FORMAT ... SETTING units => '<s>'` renders units in the column header
-  (gt's `cols_units` semantics — inspect fixture 32 expected HTML for the
-  exact markup, likely `<span class="gt_units">`).
 - `{:num %+.1f}` forced-sign already done in phase 5; fixture 33 is the
   acceptance test for it.
 
@@ -391,20 +441,17 @@ implementation choices the spec does not pin down.
    particular `%d` and `%I` render unpadded to match gt's named styles
    (`date_style`, `time_style`). See §2.2 “Implementation note
    (day/hour padding)”.
-4. **`SETTING units` exists on `FORMAT`** (spec example 32). Rendered in
-   the column header per gt's `cols_units` semantics (inspect spec
-   example 32 R code or captured HTML for exact markup).
-5. **`AS` inside `TABULATE` is a column rename, not a display label.**
+4. **`AS` inside `TABULATE` is a column rename, not a display label.**
    Display text belongs to `LABEL` (spec open-question 3).
-6. **`AS <id>` after `FORMAT SPAN` is always a bareword.** Quoted strings
+5. **`AS <id>` after `FORMAT SPAN` is always a bareword.** Quoted strings
    are a parse error. The bareword is the default display label and the
    reference used by `LABEL` and nested `FORMAT SPAN`.
-7. **No global locale.** `locale` only via `FORMAT ... SETTING locale =>
+6. **No global locale.** `locale` only via `FORMAT ... SETTING locale =>
    '...'` per column (spec open-question 6).
-8. **Named palettes from day one.** `TO viridis`, `TO RdYlGn` — reuse the
+7. **Named palettes from day one.** `TO viridis`, `TO RdYlGn` — reuse the
    VISUALISE palette catalogue (spec open-question 7). Spec examples 22
    and 24 require this in phase 7.
-9. **Captured fixtures use this repo's canonical syntax.** Every
+8. **Captured fixtures use this repo's canonical syntax.** Every
    `tests/fixtures/*/query.ggsql` uses the bare `{:num <body>}` form
    (no `%`) and gt-compatible strftime (`%d`, `%I`). No re-capture is
    needed when starting phases that touch the formatter mini-language.
