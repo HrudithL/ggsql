@@ -15,6 +15,18 @@ use crate::{GgsqlError, Result};
 pub fn parse_tabulate(source: &SourceTree<'_>) -> Result<TabulateStmt> {
     let root = source.root();
     let stmt_nodes = source.find_nodes(&root, "(tabulate_statement) @s");
+
+    // VISUALISE and TABULATE are mutually exclusive in a single query.
+    // Reject any query containing both with a clear error.
+    let viz_nodes = source.find_nodes(&root, "(visualise_statement) @viz");
+    if !viz_nodes.is_empty() && !stmt_nodes.is_empty() {
+        return Err(GgsqlError::ParseError(
+            "VISUALISE and TABULATE are mutually exclusive in a single \
+             query; use separate queries for each output mode."
+                .to_string(),
+        ));
+    }
+
     let stmt = stmt_nodes.into_iter().next().ok_or_else(|| {
         GgsqlError::ParseError("No TABULATE statement found in query".to_string())
     })?;
