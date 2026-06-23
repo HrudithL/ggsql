@@ -5,6 +5,7 @@ FORMAT open, high, low, close
   RENAMING * => '{:num %.2f}'
 FACET week
   SETTING target => (open, high, low, close),
-          aggregate => ('min', 'max', 'mean'),
+          aggregate => ('min', 'max', 'avg'),
+          label => ('min', 'max', 'mean'),
           side => 'bottom',
           fmt => '{:num %\'.2f}'
