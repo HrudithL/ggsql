@@ -5,6 +5,6 @@ LIMIT 8
 
 TABULATE name, population_2021
 FORMAT population_2021
-  RENAMING * => '{:num ,d}'
+  RENAMING * => '{:num \'d}'
 SCALE background TO ('#f7fbff', '#08306b')
   SETTING target => population_2021

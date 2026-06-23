@@ -16,7 +16,7 @@ predicate-driven cell-level highlights, including multiple HIGHLIGHTs
 in the same query), phase 9 (`FACET <col>` for row grouping with
 an optional `SETTING target / aggregate / label / side` block to emit
 per-group summary rows), and phase 10 (case-transform mini-language
-`{:Title}` / `{:UPPER}` / `{:lower}`, `FORMAT … SETTING units => '<u>'`
+`{:title}` / `{:upper}` / `{:lower}`, `FORMAT … SETTING units => '<u>'`
 in column headers, and the forced-sign acceptance test for
 `{:num +.Nf}%`), and phase 11 (an end-to-end integration example that
 exercises SQL CTE → header → spanner → per-column formats →
@@ -75,7 +75,7 @@ a browser:
 | [`17_num_decimals.ggsql`](17_num_decimals.ggsql) | `{:num .3f}` — fixed decimal places |
 | [`18_num_thousands.ggsql`](18_num_thousands.ggsql) | `{:num \'d}` — integer with thousands separators |
 | [`19_currency.ggsql`](19_currency.ggsql) | `${:num \'d}` — literal currency prefix with separators |
-| [`20_percent.ggsql`](20_percent.ggsql) | `{:num .1f}%` — trailing `%` multiplies the value by 100 |
+| [`20_percent.ggsql`](20_percent.ggsql) | `{:num .1f}%` — trailing `%` is a literal suffix; pre-scale 0-1 data in SQL |
 | [`21_scientific.ggsql`](21_scientific.ggsql) | `{:num .2e}` — scientific notation with HTML `<sup>` exponent |
 | [`22_dates.ggsql`](22_dates.ggsql) | `{:time %B %-d, %Y}` — date formatting with strftime directives |
 | [`23_datetime.ggsql`](23_datetime.ggsql) | Mixed date / time / datetime columns with `{:time ...}` |
@@ -93,8 +93,8 @@ a browser:
 | [`35_facet_basic_grouping.ggsql`](35_facet_basic_grouping.ggsql) | `FACET category` — group body rows by a column with a heading row per group |
 | [`36_facet_summary_sum.ggsql`](36_facet_summary_sum.ggsql) | `FACET … SETTING target => (cols), aggregate => ('sum')` — one summary row per group |
 | [`37_facet_multi_aggregate.ggsql`](37_facet_multi_aggregate.ggsql) | Multiple aggregates (`min`, `max`, `mean`) with custom `label` overrides |
-| [`38_case_title.ggsql`](38_case_title.ggsql) | `RENAMING * => '{:Title}'` — title-case each cell (first letter of every word) |
-| [`39_case_upper_lower.ggsql`](39_case_upper_lower.ggsql) | `{:UPPER}` and `{:lower}` — normalise text to a single case |
+| [`38_case_title.ggsql`](38_case_title.ggsql) | `RENAMING * => '{:title}'` — title-case each cell (first letter of every word) |
+| [`39_case_upper_lower.ggsql`](39_case_upper_lower.ggsql) | `{:upper}` and `{:lower}` — normalise text to a single case |
 | [`40_units_in_header.ggsql`](40_units_in_header.ggsql) | `SETTING units => 'km^2'` — unit annotation in the column header (with `^N` superscript) |
 | [`41_forced_sign_growth.ggsql`](41_forced_sign_growth.ggsql) | `{:num +.1f}%` — forced-sign percent (positives `+`, negatives Unicode `−`) |
 | [`42_comprehensive_report.ggsql`](42_comprehensive_report.ggsql) | Integration: SQL CTE → header + spanner + per-column formats + SCALE + HIGHLIGHT + FACET summary, end-to-end |

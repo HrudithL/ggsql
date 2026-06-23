@@ -1,13 +1,15 @@
 -- `SCALE background TO ('<color>', '<color>', ...)` interpolates between
 -- explicit colour stops in CIE Lab space. Two stops produce a smooth
 -- two-colour gradient; any valid CSS colour (named or hex) works.
-SELECT
-  'Acme'             AS company, 0.182 AS margin UNION ALL SELECT
-  'Globex',                      0.094            UNION ALL SELECT
-  'Initech',                     0.241            UNION ALL SELECT
-  'Umbrella',                    0.057            UNION ALL SELECT
-  'Stark Industries',            0.318            UNION ALL SELECT
-  'Wayne Enterprises',           0.205
+SELECT company, margin * 100 AS margin FROM (
+  VALUES
+    ('Acme',              0.182),
+    ('Globex',            0.094),
+    ('Initech',           0.241),
+    ('Umbrella',          0.057),
+    ('Stark Industries',  0.318),
+    ('Wayne Enterprises', 0.205)
+) AS firms(company, margin)
 TABULATE company, margin
 FORMAT margin
   RENAMING * => '{:num .1f}%'

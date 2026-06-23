@@ -1,6 +1,6 @@
 TABULATE product, in_stock, on_order FROM inventory
 FORMAT in_stock, on_order
-  RENAMING * => '{:num ,d}'
+  RENAMING * => '{:num \'d}'
 FORMAT in_stock
   RENAMING 0 => 'Out of stock'
 FORMAT on_order

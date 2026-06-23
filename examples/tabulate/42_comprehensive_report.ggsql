@@ -8,22 +8,22 @@
 -- sum/mean summary rows.
 WITH quarterly(region, quarter, revenue, units, satisfaction) AS (
   VALUES
-  ('East',  'Q1',  62.4, 1878, 0.58),
-  ('East',  'Q2', 127.1, 1483, 0.67),
-  ('East',  'Q3', 108.5, 1226, 0.82),
-  ('East',  'Q4', 185.9, 1444, 0.55),
-  ('North', 'Q1', 196.7,  645, 0.78),
-  ('North', 'Q2',  67.6, 2144, 0.61),
-  ('North', 'Q3', 121.2, 1871, 0.69),
-  ('North', 'Q4', 134.0,  696, 0.81),
-  ('South', 'Q1', 185.6, 2039, 0.86),
-  ('South', 'Q2',  70.8,  725, 0.78),
-  ('South', 'Q3', 198.3, 1003, 0.64),
-  ('South', 'Q4', 192.0, 2469, 0.59),
-  ('West',  'Q1', 117.0, 1768, 0.63),
-  ('West',  'Q2', 175.4, 1421, 0.92),
-  ('West',  'Q3', 160.6, 1125, 0.92),
-  ('West',  'Q4', 171.7,  761, 0.84)
+  ('East',  'Q1',  62.4, 1878, 58),
+  ('East',  'Q2', 127.1, 1483, 63),
+  ('East',  'Q3', 108.5, 1226, 82),
+  ('East',  'Q4', 185.9, 1444, 55),
+  ('North', 'Q1', 196.7,  645, 78),
+  ('North', 'Q2',  67.6, 2144, 61),
+  ('North', 'Q3', 121.2, 1871, 62),
+  ('North', 'Q4', 134.0,  696, 81),
+  ('South', 'Q1', 185.6, 2039, 86),
+  ('South', 'Q2',  70.8,  725, 78),
+  ('South', 'Q3', 198.3, 1003, 64),
+  ('South', 'Q4', 192.0, 2469, 59),
+  ('West',  'Q1', 117.0, 1768, 63),
+  ('West',  'Q2', 175.4, 1421, 92),
+  ('West',  'Q3', 160.6, 1125, 92),
+  ('West',  'Q4', 171.7,  761, 84)
 )
 
 TABULATE region, quarter, revenue, units, satisfaction FROM quarterly
@@ -32,22 +32,22 @@ FORMAT STUB quarter
 FORMAT SPAN revenue, units AS financial
 
 FORMAT revenue
-  RENAMING * => '${:num ,.1f}'
+  RENAMING * => '${:num \'.1f}'
 FORMAT units
-  RENAMING * => '{:num ,d}'
+  RENAMING * => '{:num \'d}'
 FORMAT satisfaction
-  RENAMING * => '{:num .1f}%%'
+  RENAMING * => '{:num d}%'
 
 FACET region
   SETTING target    => (revenue, units),
           aggregate => ('sum', 'mean'),
           side      => 'bottom'
 
-SCALE background FROM (0, 1) TO ('white', 'green')
+SCALE background FROM (0, 100) TO ('white', 'green')
   SETTING target => satisfaction
 
 HIGHLIGHT satisfaction
-  FILTER  satisfaction < 0.7
+  FILTER  satisfaction < 70
   SETTING face  => 'bold',
           color => 'red'
 
