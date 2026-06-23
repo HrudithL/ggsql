@@ -3,4 +3,16 @@ title = "Units in column labels"
 gt_version = "1.3.0"
 captured_at = "2026-06-04T00:32:07-0400"
 normalization_profile = "default"
-# allowed_diff = []  # add regex strings only with justification in AGENT_LOG.md
+# Phase 3 (POLISHING_PLAN) removed `FORMAT … SETTING units => '<u>'`. The
+# captured expected.html for fixture 32 embeds gt's <span><sup> markup
+# in the column-heading <th> for `land_area_km2` and `density_2021`. The
+# replacement query puts the unit annotation in LABEL as Unicode `(km²)`
+# / `(people/km²)`, which renders without <sup>. The two regex entries
+# below mask each affected <th> tag entirely (both the rendered and
+# expected side collapse to <<ALLOWED_DIFF>>). Body cells (<td>) are
+# unaffected by the mask and still verify the data values + formatters
+# match. Justification logged in AGENT_LOG.md.
+allowed_diff = [
+  '<th[^>]*id="land_area_km2"[^>]*>.*?</th>',
+  '<th[^>]*id="density_2021"[^>]*>.*?</th>',
+]

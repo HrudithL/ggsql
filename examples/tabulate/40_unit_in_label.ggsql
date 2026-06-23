@@ -1,0 +1,19 @@
+-- Units in column headers are written into the LABEL text directly,
+-- using Unicode characters for superscripts (²) or other typography.
+-- There is no separate `SETTING units => '...'` key — anything beyond
+-- the column's display name belongs in the LABEL string.
+SELECT * FROM (VALUES
+  ('Tokyo',     2194.07, 6168.7),
+  ('Osaka',      225.21, 12012.2),
+  ('Yokohama',   437.38, 8534.5),
+  ('Nagoya',     326.45, 7148.9)
+) AS cities(name, land_area, pop_density)
+TABULATE name, land_area, pop_density
+FORMAT STUB name
+FORMAT land_area
+  RENAMING * => '{:num %\'.1f}'
+FORMAT pop_density
+  RENAMING * => '{:num %\'d}'
+LABEL
+  land_area   => 'Land Area (km²)',
+  pop_density => 'Pop Density (people/km²)'

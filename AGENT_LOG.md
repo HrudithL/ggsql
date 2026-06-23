@@ -522,3 +522,22 @@ each concept.
 - Phase merged via four logical commits on
   `agent/tabulate-phase-12`. Examples regenerated via
   `bash examples/tabulate/run.sh`. No `allowed_diff` entries needed.
+
+## 2026-06-23 — polishing Phase 3: remove SETTING units
+
+- `FORMAT … SETTING units => '<s>'` removed from parser, AST plumbing,
+  IR (`ColMeta::units`), HTML writer, and `render_units_html`.
+  `src/parser/tabulate.rs::parse_setting_pair` rejects `units` at parse
+  time with the message "FORMAT SETTING `units` was removed; put units
+  in the LABEL text instead, e.g. LABEL land_area => 'Land Area (km²)'".
+- Fixture 32 (`units_in_column_labels`) `query.ggsql` rewritten to put
+  the unit annotation in `LABEL`, using Unicode `(km²)` / `(people/km²)`.
+  The captured `expected.html` embeds gt's `<span><sup>2</sup></span>`
+  markup that LABEL (which HTML-escapes) cannot reproduce, so two
+  `allowed_diff` regexes mask the two affected `<th>` tags entirely.
+  Justification: the body cells (`<td>`) are unaffected by the mask and
+  still verify the data values and number formatters end-to-end; the
+  header rendering of inline unit markup is the only deliberate gap.
+- Example `40_units_in_header.ggsql` renamed to `40_unit_in_label.ggsql`
+  and rewritten to use `LABEL <col> => '... (km²)'`. README row
+  updated.
