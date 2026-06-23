@@ -148,13 +148,25 @@ impl StringTransform {
 // Numeric: `{:num <printf>}` with optional literal prefix / suffix.
 // ============================================================================
 
+/// Find the byte offset of `{:<keyword> ` (with trailing space) inside
+/// `rhs`, matching the keyword case-insensitively. Returns `(open,
+/// after_open)` where `open` is the offset of `{` and `after_open` is
+/// the offset just past the trailing space.
+fn find_keyword(rhs: &str, keyword: &str) -> Option<(usize, usize)> {
+    let needle_lower = format!("{{:{} ", keyword.to_ascii_lowercase());
+    let needle_len = needle_lower.len();
+    let rhs_lower = rhs.to_ascii_lowercase();
+    let open = rhs_lower.find(&needle_lower)?;
+    Some((open, open + needle_len))
+}
+
 fn build_num_format(rhs: &str) -> Option<(NumFn, bool)> {
-    let open = rhs.find("{:num ")?;
-    let after = &rhs[open + "{:num ".len()..];
+    let (open, after_open) = find_keyword(rhs, "num")?;
+    let after = &rhs[after_open..];
     let close = after.find('}')?;
     let body = after[..close].trim();
     let prefix = rhs[..open].to_string();
-    let suffix = rhs[open + "{:num ".len() + close + 1..].to_string();
+    let suffix = rhs[after_open + close + 1..].to_string();
 
     let spec = NumSpec::parse(body)?;
     let raw_html = spec.conv == 'e';
@@ -341,12 +353,12 @@ fn render_scientific_html(x: f64, precision: usize) -> String {
 // ============================================================================
 
 fn build_time_format(rhs: &str, locale: Option<&str>) -> Option<TimeFn> {
-    let open = rhs.find("{:time ")?;
-    let after = &rhs[open + "{:time ".len()..];
+    let (open, after_open) = find_keyword(rhs, "time")?;
+    let after = &rhs[after_open..];
     let close = after.find('}')?;
     let fmt = after[..close].to_string();
     let prefix = rhs[..open].to_string();
-    let suffix = rhs[open + "{:time ".len() + close + 1..].to_string();
+    let suffix = rhs[after_open + close + 1..].to_string();
     let lang = Lang::from_locale(locale);
 
     Some(Box::new(move |v: Option<&str>| -> String {
@@ -739,5 +751,49 @@ mod tests {
             ),
             "Monday, January 1, 2018 at 2:22 AM"
         );
+    }
+
+    fn s(rhs: &str, v: &str) -> String {
+        let (fmt, _) = build_format(rhs, None).expect("string parse");
+        match fmt {
+            CellFmt::Str(f) => f(Some(v)),
+            _ => panic!("expected string"),
+        }
+    }
+
+    #[test]
+    fn raw_passthrough_identity() {
+        // `{}` with no keyword passes the cell value through unchanged.
+        assert_eq!(s("{}", "hello"), "hello");
+    }
+    #[test]
+    fn raw_passthrough_with_prefix_suffix() {
+        // Literal prefix/suffix outside the `{}` is tacked on verbatim
+        // to every cell.
+        assert_eq!(s("${}abc", "42"), "$42abc");
+        assert_eq!(s(">>{}", "x"), ">>x");
+    }
+    #[test]
+    fn case_keywords_are_case_insensitive() {
+        // The keyword match in build_string_format is
+        // ASCII-case-insensitive, matching SQL keyword handling.
+        assert_eq!(s("{:title}", "hello world"), "Hello World");
+        assert_eq!(s("{:Title}", "hello world"), "Hello World");
+        assert_eq!(s("{:TITLE}", "hello world"), "Hello World");
+        assert_eq!(s("{:upper}", "abc"), "ABC");
+        assert_eq!(s("{:UPPER}", "abc"), "ABC");
+        assert_eq!(s("{:Upper}", "abc"), "ABC");
+        assert_eq!(s("{:lower}", "ABC"), "abc");
+        assert_eq!(s("{:LOWER}", "ABC"), "abc");
+    }
+    #[test]
+    fn num_keyword_is_case_insensitive() {
+        assert_eq!(num("{:NUM %d}", 42.0), "42");
+        assert_eq!(num("{:Num %.1f}", 3.14), "3.1");
+    }
+    #[test]
+    fn time_keyword_is_case_insensitive() {
+        assert_eq!(time("{:TIME %Y}", "2024-06-23", None), "2024");
+        assert_eq!(time("{:Time %Y}", "2024-06-23", None), "2024");
     }
 }
