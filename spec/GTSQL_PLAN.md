@@ -385,7 +385,7 @@ Only one `FACET` clause may appear per query.
 **Settings:**
 - `target => <column>` or `target => (<col1>, <col2>, ...)` — column(s) to aggregate (maps to `summary_rows(columns = ...)`). Required when `aggregate` is set. Mirrors the `target` syntax used in `SCALE`.
 - `aggregate => (<fn>, ...)` — aggregation function(s) to apply. Recognized functions: `'min'`, `'max'`, `'avg'`, `'median'`, `'sd'`, `'sum'`. `'mean'` is rejected (use `'avg'`). Required when `target` is set. Omit both `target` and `aggregate` to use `FACET` purely for row grouping.
-- `groups => [grp1, grp2]` — restrict summary rows to specific group values from the `<group_col>` (default: all groups). Only meaningful when `FACET` has a grouping column.
+- `groups => [grp1, grp2]` — **optional**. Restricts summary rows to the listed group values from the `<group_col>`. Default (omitted): every group receives summaries. Referencing a group value that does not exist in the data is a parse-/execution-time error. Only meaningful when `FACET` has a grouping column.
 - `side => 'top'/'bottom'` — placement of summary rows relative to each group (default: `'bottom'`)
 - `label => 'string'` or `['label1', 'label2', ...]` — label(s) for the summary row(s)
 - `missing_text => 'string'` — text for non-aggregable cells

@@ -221,6 +221,9 @@ FACET [<group_col>]
   `SCALE ... SETTING target =>`.
 - `aggregate` functions: `'min'`, `'max'`, `'avg'`, `'median'`, `'sd'`, `'sum'`.
   (`'mean'` is rejected — use `'avg'`.)
+- `groups => [v1, v2]` is optional. When omitted, every group of
+  `<group_col>` receives summaries. When supplied, only the listed group
+  values get summary rows; referencing a non-existent group is an error.
 - `label` is a single string for one aggregate, a list aligned to
   `aggregate` for multiple. Fixture 30/34 use `label => ['Min', 'Max', 'Avg']`.
 
