@@ -789,7 +789,7 @@ mod tests {
     #[test]
     fn num_keyword_is_case_insensitive() {
         assert_eq!(num("{:NUM %d}", 42.0), "42");
-        assert_eq!(num("{:Num %.1f}", 3.14), "3.1");
+        assert_eq!(num("{:Num %.1f}", 4.56), "4.6");
     }
     #[test]
     fn time_keyword_is_case_insensitive() {

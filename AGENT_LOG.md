@@ -541,3 +541,42 @@ each concept.
 - Example `40_units_in_header.ggsql` renamed to `40_unit_in_label.ggsql`
   and rewritten to use `LABEL <col> => '... (km²)'`. README row
   updated.
+
+## 2026-06-23 — POLISHING_PLAN sweep complete
+
+Executed Phases 0–7 from POLISHING_PLAN.md on branch `polishing`,
+merged each phase into `main` along the way. Summary:
+
+* Phase 0 — branch + baseline (35 fixture tests green).
+* Phase 1 — documentation alignment, 13 commits to spec/GTSQL_PLAN.md
+  (copied into the repo from the read-only /spec/ mount) and
+  TABULATE_PLAN.md (A3, A4, A6, B1, B6, B7, B8, B9, B10, B11, C1,
+  C3, C5, C6).
+* Phase 2 — `{:num %<body>}` printf body flipped to require the `%`
+  introducer (matching the spec). Find_keyword helper added so
+  formatter keywords are case-insensitive. Fixture + example sweep.
+  Example 43_raw_passthrough.ggsql added.
+* Phase 3 — `FORMAT SETTING units` removed from parser/AST/IR/HTML.
+  Fixture 32 kept passing via two allowed_diff regexes masking the
+  affected <th> tags. Example 40 renamed to 40_unit_in_label.ggsql.
+* Phase 4 — aggregate `'mean'` → `'avg'`. Parser rejects `'mean'` /
+  `'average'`. Fixtures + examples swept.
+* Phase 5 — missing features:
+   - 5a FORMAT * wildcard (grammar + parser + execute expand_cols).
+   - 5b SCALE foreground / size / opacity aesthetics
+     (build_cell_scale 4-tuple, css_rgba for opacity composition).
+   - 5c HIGHLIGHT size / transform / decoration.
+   - 5d FACET groups => [...] filter + execution-time validation.
+  + examples 44–52.
+* Phase 6 — validation rules:
+   - 6.1 VISUALISE/TABULATE mutual exclusion.
+   - 6.3 spanner-ID collisions.
+   - 6.6 parenthesized target form enforced; fixture/example sweep.
+   - 6.2 / 6.4 / 6.5 already met by existing code or shipped in 5d.
+* Phase 7 — cleanup: cargo fmt clean; only the two pre-existing
+  src/writer/vegalite/layer.rs warnings remain. 35/35 fixture tests
+  and 1541/1541 lib tests pass under the no-default + duckdb,parquet,
+  vegalite,builtin-data feature set.
+
+Two allowed_diff additions were introduced (both in fixture 32) when
+the `units` feature was removed; justification logged above.

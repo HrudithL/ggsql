@@ -790,8 +790,7 @@ fn build_table_ir(
             .iter()
             .map(|c| c.name.to_ascii_lowercase())
             .collect();
-        let mut seen_spans: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+        let mut seen_spans: std::collections::HashSet<String> = std::collections::HashSet::new();
         for fc in &tab_stmt.format_clauses {
             if fc.mode != FormatMode::Span {
                 continue;
@@ -1039,10 +1038,9 @@ fn build_cell_scale(
                     // Opacity stops are numbers in [0, 1]. The grammar
                     // currently parses them as strings; try f32.
                     let num_stops: Vec<f32> = match &sc.palette {
-                        crate::tabulate::ast::ScalePalette::Stops(s) => s
-                            .iter()
-                            .filter_map(|x| x.parse::<f32>().ok())
-                            .collect(),
+                        crate::tabulate::ast::ScalePalette::Stops(s) => {
+                            s.iter().filter_map(|x| x.parse::<f32>().ok()).collect()
+                        }
                         crate::tabulate::ast::ScalePalette::Named(_) => continue,
                     };
                     if num_stops.len() < 2 {
@@ -1505,49 +1503,48 @@ fn build_row_groups(
             let summary_rows: Vec<SummaryRow> = if !group_in_filter {
                 Vec::new()
             } else {
-                view
-                .aggregates
-                .iter()
-                .enumerate()
-                .map(|(agg_idx, agg)| {
-                    // Per-target-column aggregate values keyed by column index.
-                    let mut values_by_col: HashMap<usize, Option<f64>> = HashMap::new();
-                    for (col_idx, arr) in &target_data {
-                        let vals: Vec<f64> = row_indices
-                            .iter()
-                            .filter_map(|&r| numeric_to_f64(arr, r))
-                            .collect();
-                        values_by_col.insert(*col_idx, compute_aggregate(&vals, agg));
-                    }
+                view.aggregates
+                    .iter()
+                    .enumerate()
+                    .map(|(agg_idx, agg)| {
+                        // Per-target-column aggregate values keyed by column index.
+                        let mut values_by_col: HashMap<usize, Option<f64>> = HashMap::new();
+                        for (col_idx, arr) in &target_data {
+                            let vals: Vec<f64> = row_indices
+                                .iter()
+                                .filter_map(|&r| numeric_to_f64(arr, r))
+                                .collect();
+                            values_by_col.insert(*col_idx, compute_aggregate(&vals, agg));
+                        }
 
-                    let cells: Vec<Option<String>> = (0..columns.len())
-                        .map(|col_idx| {
-                            if Some(col_idx) == stub_col_idx {
-                                return None; // stub holds the label, set below
-                            }
-                            if !target_idxs.iter().any(|(_, i)| *i == col_idx) {
-                                return None; // non-target → em-dash
-                            }
-                            values_by_col.get(&col_idx).copied().flatten().map(|v| {
-                                if let Some(ref f) = summary_fmt {
-                                    f(Some(v))
-                                } else {
-                                    let nsmall = *nsmall_by_col.get(&col_idx).unwrap_or(&0);
-                                    format_summary_value(v, nsmall)
+                        let cells: Vec<Option<String>> = (0..columns.len())
+                            .map(|col_idx| {
+                                if Some(col_idx) == stub_col_idx {
+                                    return None; // stub holds the label, set below
                                 }
+                                if !target_idxs.iter().any(|(_, i)| *i == col_idx) {
+                                    return None; // non-target → em-dash
+                                }
+                                values_by_col.get(&col_idx).copied().flatten().map(|v| {
+                                    if let Some(ref f) = summary_fmt {
+                                        f(Some(v))
+                                    } else {
+                                        let nsmall = *nsmall_by_col.get(&col_idx).unwrap_or(&0);
+                                        format_summary_value(v, nsmall)
+                                    }
+                                })
                             })
-                        })
-                        .collect();
+                            .collect();
 
-                    let label = if agg_idx < view.labels.len() {
-                        view.labels[agg_idx].clone()
-                    } else {
-                        agg.clone()
-                    };
+                        let label = if agg_idx < view.labels.len() {
+                            view.labels[agg_idx].clone()
+                        } else {
+                            agg.clone()
+                        };
 
-                    SummaryRow { label, cells }
-                })
-                .collect()
+                        SummaryRow { label, cells }
+                    })
+                    .collect()
             };
 
             RowGroup {
