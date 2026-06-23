@@ -739,15 +739,29 @@ module.exports = grammar({
     // FORMAT [SPAN | STUB] col [, col ...] [AS span_id]
     //   [SETTING key => value, ...]
     //   [RENAMING lhs => rhs, ...]
-    format_clause: $ => prec.right(seq(
-      $.format_keyword,
-      optional($.format_mode),
-      $.identifier,
-      repeat(seq(',', $.identifier)),
-      optional(seq(caseInsensitive('AS'), field('span_id', $.identifier))),
-      optional($.format_setting_block),
-      optional($.format_renaming_block)
+    //
+    // `FORMAT *` is a wildcard that targets every visible column. It
+    // may not be combined with a comma-separated list, with SPAN/STUB,
+    // or with `AS <id>` — those forms require explicit column names.
+    format_clause: $ => prec.right(choice(
+      seq(
+        $.format_keyword,
+        $.format_wildcard,
+        optional($.format_setting_block),
+        optional($.format_renaming_block)
+      ),
+      seq(
+        $.format_keyword,
+        optional($.format_mode),
+        $.identifier,
+        repeat(seq(',', $.identifier)),
+        optional(seq(caseInsensitive('AS'), field('span_id', $.identifier))),
+        optional($.format_setting_block),
+        optional($.format_renaming_block)
+      )
     )),
+
+    format_wildcard: $ => token(prec(4, '*')),
 
     format_keyword: $ => token(prec(5, caseInsensitive('FORMAT'))),
 

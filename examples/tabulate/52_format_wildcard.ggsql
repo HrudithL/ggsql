@@ -1,0 +1,13 @@
+-- `FORMAT *` is a wildcard that applies the clause to every visible
+-- column. Useful for table-wide null/zero substitutions and other
+-- whole-table treatments. Here a single FORMAT * replaces every
+-- missing cell with an em-dash, regardless of column type.
+SELECT * FROM (VALUES
+  ('Alpha', 100, 'on track'),
+  ('Bravo', NULL::int, 'paused'),
+  ('Charlie', 250, NULL::varchar),
+  (NULL::varchar, 75, 'on track')
+) AS rows(name, units, status)
+TABULATE name, units, status
+FORMAT *
+  RENAMING null => '—'

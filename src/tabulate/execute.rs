@@ -423,6 +423,16 @@ fn build_table_ir(
         }
     }
 
+    // Resolve `FORMAT *` (wildcard) to the full set of visible column
+    // names. Non-wildcard column lists pass through unchanged.
+    let expand_cols = |cols: &[String]| -> Vec<String> {
+        if cols.iter().any(|c| c == "*") {
+            visible_cols.iter().map(|s| s.to_string()).collect()
+        } else {
+            cols.to_vec()
+        }
+    };
+
     // Per-column width / align overrides from `FORMAT <col> SETTING ...`.
     let mut width_overrides: HashMap<String, String> = HashMap::new();
     let mut align_overrides: HashMap<String, ColAlign> = HashMap::new();
@@ -433,7 +443,7 @@ fn build_table_ir(
         for s in &fc.settings {
             if s.key.eq_ignore_ascii_case("width") {
                 if let SettingValue::String(v) = &s.value {
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         width_overrides.insert(col.to_ascii_lowercase(), v.clone());
                     }
                 }
@@ -446,7 +456,7 @@ fn build_table_ir(
                         _ => None,
                     };
                     if let Some(a) = align {
-                        for col in &fc.columns {
+                        for col in &expand_cols(&fc.columns) {
                             align_overrides.insert(col.to_ascii_lowercase(), a);
                         }
                     }
@@ -546,7 +556,7 @@ fn build_table_ir(
         for s in &fc.settings {
             if s.key.eq_ignore_ascii_case("locale") {
                 if let SettingValue::String(v) = &s.value {
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         locale_overrides.insert(col.to_ascii_lowercase(), v.clone());
                     }
                 }
@@ -555,25 +565,25 @@ fn build_table_ir(
         for r in &fc.renamings {
             match &r.lhs {
                 RenamingLhs::Wildcard => {
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         format_overrides.insert(col.to_ascii_lowercase(), r.rhs.clone());
                     }
                 }
                 RenamingLhs::Null => {
                     let v = smart_text(&r.rhs);
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         null_subst.insert(col.to_ascii_lowercase(), v.clone());
                     }
                 }
                 RenamingLhs::Zero => {
                     let v = smart_text(&r.rhs);
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         zero_subst.insert(col.to_ascii_lowercase(), v.clone());
                     }
                 }
                 RenamingLhs::Number(n) => {
                     let v = smart_text(&r.rhs);
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         numeric_substs
                             .entry(col.to_ascii_lowercase())
                             .or_default()
@@ -582,7 +592,7 @@ fn build_table_ir(
                 }
                 RenamingLhs::Literal(lit) => {
                     let v = smart_text(&r.rhs);
-                    for col in &fc.columns {
+                    for col in &expand_cols(&fc.columns) {
                         literal_substs
                             .entry(col.to_ascii_lowercase())
                             .or_default()
