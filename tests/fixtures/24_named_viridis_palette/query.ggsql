@@ -1,4 +1,4 @@
 SELECT mfr, model, hp, mpg_c FROM gtcars LIMIT 12
 TABULATE mfr, model, hp, mpg_c
 SCALE background TO viridis
-  SETTING target => hp
+  SETTING target => (hp)

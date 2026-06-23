@@ -14,4 +14,4 @@ TABULATE company, margin
 FORMAT margin
   RENAMING * => '{:num %.1f}%'
 SCALE background TO ('white', 'darkgreen')
-  SETTING target => margin
+  SETTING target => (margin)

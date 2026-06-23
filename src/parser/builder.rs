@@ -209,6 +209,17 @@ pub fn build_ast(source: &SourceTree) -> Result<Vec<Plot>> {
     let query = "(visualise_statement) @viz";
     let viz_nodes = source.find_nodes(&root, query);
 
+    // VISUALISE and TABULATE are mutually exclusive in a single query.
+    // Reject any query containing both with a clear error.
+    let tab_nodes = source.find_nodes(&root, "(tabulate_statement) @tab");
+    if !viz_nodes.is_empty() && !tab_nodes.is_empty() {
+        return Err(GgsqlError::ParseError(
+            "VISUALISE and TABULATE are mutually exclusive in a single \
+             query; use separate queries for each output mode."
+                .to_string(),
+        ));
+    }
+
     let mut specs = Vec::new();
     for viz_node in viz_nodes {
         let spec = build_visualise_statement(&viz_node, source)?;

@@ -15,6 +15,18 @@ use crate::{GgsqlError, Result};
 pub fn parse_tabulate(source: &SourceTree<'_>) -> Result<TabulateStmt> {
     let root = source.root();
     let stmt_nodes = source.find_nodes(&root, "(tabulate_statement) @s");
+
+    // VISUALISE and TABULATE are mutually exclusive in a single query.
+    // Reject any query containing both with a clear error.
+    let viz_nodes = source.find_nodes(&root, "(visualise_statement) @viz");
+    if !viz_nodes.is_empty() && !stmt_nodes.is_empty() {
+        return Err(GgsqlError::ParseError(
+            "VISUALISE and TABULATE are mutually exclusive in a single \
+             query; use separate queries for each output mode."
+                .to_string(),
+        ));
+    }
+
     let stmt = stmt_nodes.into_iter().next().ok_or_else(|| {
         GgsqlError::ParseError("No TABULATE statement found in query".to_string())
     })?;
@@ -450,11 +462,12 @@ fn parse_scale_clause(
         .find_nodes(node, "(tab_scale_setting) @s")
         .into_iter()
         .next()
-        .map(|s_node| {
+        .map(|s_node| -> Result<Vec<String>> {
             let key_node = s_node.child_by_field_name("key");
             let mut ids = Vec::new();
             let mut cursor = s_node.walk();
             let mut after_arrow = false;
+            let mut saw_paren = false;
             for child in s_node.children(&mut cursor) {
                 if child.kind() == "=>" {
                     after_arrow = true;
@@ -462,6 +475,9 @@ fn parse_scale_clause(
                 }
                 if !after_arrow {
                     continue;
+                }
+                if child.kind() == "(" {
+                    saw_paren = true;
                 }
                 if child.kind() == "identifier" {
                     if let Some(k) = &key_node {
@@ -472,8 +488,17 @@ fn parse_scale_clause(
                     ids.push(source.get_text(&child));
                 }
             }
-            ids
+            // C1: enforce parenthesized form even for a single column.
+            if !ids.is_empty() && !saw_paren {
+                return Err(GgsqlError::ParseError(
+                    "SCALE target requires a parenthesized list, e.g. \
+                     `target => (col)` or `target => (col1, col2)`"
+                        .to_string(),
+                ));
+            }
+            Ok(ids)
         })
+        .transpose()?
         .unwrap_or_default();
 
     Ok(ScaleClause {
@@ -652,6 +677,18 @@ fn parse_facet_pair(source: &SourceTree<'_>, node: &tree_sitter::Node<'_>) -> Re
                 )));
             }
         }
+    }
+
+    // C1: `target` must be a parenthesized list, even for a single column.
+    // The bareword form `target => <col>` is rejected.
+    if key.eq_ignore_ascii_case("target")
+        && matches!(parsed, FacetValue::Identifier(_) | FacetValue::String(_))
+    {
+        return Err(GgsqlError::ParseError(
+            "FACET target requires a parenthesized list, e.g. `target => (col)` \
+             or `target => (col1, col2)`"
+                .to_string(),
+        ));
     }
     Ok(FacetSetting { key, value: parsed })
 }

@@ -783,6 +783,38 @@ fn build_table_ir(
 
     let header_forest = build_header_forest(tab_stmt, &columns, &label_map);
 
+    // Validate spanner-ID uniqueness against column names and other
+    // spanners (B8 / Phase 6.3 of POLISHING_PLAN).
+    {
+        let visible: std::collections::HashSet<String> = columns
+            .iter()
+            .map(|c| c.name.to_ascii_lowercase())
+            .collect();
+        let mut seen_spans: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for fc in &tab_stmt.format_clauses {
+            if fc.mode != FormatMode::Span {
+                continue;
+            }
+            let Some(span_id) = &fc.span_id else {
+                continue;
+            };
+            let key = span_id.to_ascii_lowercase();
+            if visible.contains(&key) {
+                return Err(GgsqlError::ParseError(format!(
+                    "spanner ID '{}' collides with column '{}'",
+                    span_id, span_id
+                )));
+            }
+            if !seen_spans.insert(key) {
+                return Err(GgsqlError::ParseError(format!(
+                    "duplicate spanner ID '{}'",
+                    span_id
+                )));
+            }
+        }
+    }
+
     let (cell_bg, cell_fg, cell_size, cell_opacity) =
         build_cell_scale(tab_stmt, &columns, combined);
     let cell_style = build_cell_style(tab_stmt, &columns, combined);
