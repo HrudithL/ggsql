@@ -55,7 +55,7 @@ FORMAT SPAN span1, col3 AS combined
 -- Row grouping and/or summary aggregation (can appear *only once*)
 FACET [<group_col>, ...]
   SETTING target => (<col>, ...),
-          aggregate => ('min', 'max', 'mean')
+          aggregate => ('min', 'max', 'avg')
 
 -- Styling based on numerical data (can appear multiple times)
 SCALE background FROM (0, 10) TO ('white', 'red') VIA log10
@@ -382,7 +382,7 @@ Only one `FACET` clause may appear per query.
 
 **Settings:**
 - `target => <column>` or `target => (<col1>, <col2>, ...)` — column(s) to aggregate (maps to `summary_rows(columns = ...)`). Required when `aggregate` is set. Mirrors the `target` syntax used in `SCALE`.
-- `aggregate => (<fn>, ...)` — aggregation function(s) to apply. Recognized functions: `'min'`, `'max'`, `'mean'`, `'median'`, `'sd'`, `'sum'`. Required when `target` is set. Omit both `target` and `aggregate` to use `FACET` purely for row grouping.
+- `aggregate => (<fn>, ...)` — aggregation function(s) to apply. Recognized functions: `'min'`, `'max'`, `'avg'`, `'median'`, `'sd'`, `'sum'`. `'mean'` is rejected (use `'avg'`). Required when `target` is set. Omit both `target` and `aggregate` to use `FACET` purely for row grouping.
 - `groups => [grp1, grp2]` — restrict summary rows to specific group values from the `<group_col>` (default: all groups). Only meaningful when `FACET` has a grouping column.
 - `side => 'top'/'bottom'` — placement of summary rows relative to each group (default: `'bottom'`)
 - `label => 'string'` or `['label1', 'label2', ...]` — label(s) for the summary row(s)
@@ -411,7 +411,7 @@ TABULATE date, open, high, low, close FROM sp500
 FORMAT STUB date
 FACET
   SETTING target => (open, high, low, close),
-          aggregate => ('min', 'max', 'mean'),
+          aggregate => ('min', 'max', 'avg'),
           side => 'bottom',
           label => ['Min', 'Max', 'Avg']
 
@@ -419,7 +419,7 @@ FACET
 TABULATE region, quarter, revenue FROM sales
 FACET region
   SETTING target => revenue,
-          aggregate => ('mean'),
+          aggregate => ('avg'),
           side => 'top',
           groups => ['North', 'South'],
           label => 'Avg',
@@ -430,7 +430,7 @@ FACET region
 - `FACET category` → `gt(groupname_col = "category")`
 - `FACET category SETTING target => (revenue, units), aggregate => ('sum')` → `gt(groupname_col = "category") |> summary_rows(columns = c(revenue, units), fns = list("sum"))`
 - `FACET SETTING target => (revenue, units), aggregate => ('sum')` → `summary_rows(columns = c(revenue, units), fns = list("sum"))` (no grouping)
-- `aggregate => ('min', 'max', 'mean'), label => ['Min', 'Max', 'Avg']` → `summary_rows(fns = list(list(label = "Min", fn = "min"), list(label = "Max", fn = "max"), list(label = "Avg", fn = "mean")))`
+- `aggregate => ('min', 'max', 'avg'), label => ['Min', 'Max', 'Avg']` → `summary_rows(fns = list(list(label = "Min", fn = "min"), list(label = "Max", fn = "max"), list(label = "Avg", fn = "mean")))`
 - `groups => ['North', 'South']` → `summary_rows(groups = c("North", "South"), ...)`
 
 ---
@@ -623,7 +623,7 @@ FORMAT satisfaction
 -- Summaries (table-wide totals; no row grouping)
 FACET
   SETTING target => (revenue, units),
-          aggregate => ('sum', 'mean'),
+          aggregate => ('sum', 'avg'),
           label => ['Total', 'Average'],
           side => 'bottom'
 

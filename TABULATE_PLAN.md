@@ -189,7 +189,8 @@ FACET [<group_col>]
   table-wide summary rows only.
 - `target` accepts a single bareword column or a parenthesized list. Mirrors
   `SCALE ... SETTING target =>`.
-- `aggregate` functions: `'min'`, `'max'`, `'mean'`, `'median'`, `'sd'`, `'sum'`.
+- `aggregate` functions: `'min'`, `'max'`, `'avg'`, `'median'`, `'sd'`, `'sum'`.
+  (`'mean'` is rejected — use `'avg'`.)
 - `label` is a single string for one aggregate, a list aligned to
   `aggregate` for multiple. Fixture 30/34 use `label => ['Min', 'Max', 'Avg']`.
 
