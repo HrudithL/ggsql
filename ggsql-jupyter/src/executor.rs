@@ -24,6 +24,12 @@ pub enum ExecutionResult {
     Visualization {
         spec: String, // Vega-Lite JSON
     },
+    /// TABULATE query: pre-rendered, self-contained HTML table.
+    Table {
+        html: String,
+        rows: usize,
+        cols: usize,
+    },
     /// Connection changed via meta-command
     ConnectionChanged { uri: String, display_name: String },
 }
@@ -207,12 +213,24 @@ impl QueryExecutor {
             return Ok(ExecutionResult::ConnectionChanged { uri, display_name });
         }
 
-        // 1. Validate to check if there's a visualization
+        // 1. Validate to check if there's a visualization or a TABULATE clause
         let validated = validate(code)?;
 
-        // 2. Check if there's a visualization
+        // 2. TABULATE takes priority over the pure-SQL branch and is
+        //    mutually exclusive with VISUALISE (the parser/spec forbid
+        //    mixing the two, but we order this branch first so that any
+        //    future loosening still routes correctly).
+        if validated.has_tabulate() && !validated.has_visual() {
+            let ir = ggsql::tabulate::execute::execute_with_reader(self.reader.as_ref(), code)?;
+            let rows = ir.rows.len();
+            let cols = ir.columns.len();
+            let html = ggsql::tabulate::html::render(&ir);
+            tracing::info!("TABULATE executed: {} rows, {} cols", rows, cols);
+            return Ok(ExecutionResult::Table { html, rows, cols });
+        }
+
+        // 3. Pure SQL query - execute directly and return DataFrame
         if !validated.has_visual() {
-            // Pure SQL query - execute directly and return DataFrame
             let df = self.reader.execute_sql(code)?;
             tracing::info!(
                 "Pure SQL executed: {} rows, {} cols",
@@ -251,6 +269,36 @@ mod tests {
         let code = "SELECT 1 as x, 2 as y VISUALISE x, y DRAW point";
         let result = executor.execute(code).unwrap();
 
+        assert!(matches!(result, ExecutionResult::Visualization { .. }));
+    }
+
+    #[test]
+    fn test_tabulate() {
+        let mut executor = QueryExecutor::new().unwrap();
+        let code = "SELECT 1 AS x, 2 AS y TABULATE x, y";
+        let result = executor.execute(code).unwrap();
+
+        match result {
+            ExecutionResult::Table { html, rows, cols } => {
+                assert_eq!(rows, 1);
+                assert_eq!(cols, 2);
+                assert!(
+                    html.contains("gt_table"),
+                    "rendered HTML must carry the gt_table class"
+                );
+            }
+            other => panic!("expected ExecutionResult::Table, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_visualize_wins_over_pure_sql() {
+        // Defensive: when only VISUALISE is present, the executor takes the
+        // visualization branch (not the TABULATE branch, which requires the
+        // TABULATE clause to be present in validate()).
+        let mut executor = QueryExecutor::new().unwrap();
+        let code = "SELECT 1 AS x, 2 AS y VISUALISE x, y DRAW point";
+        let result = executor.execute(code).unwrap();
         assert!(matches!(result, ExecutionResult::Visualization { .. }));
     }
 
