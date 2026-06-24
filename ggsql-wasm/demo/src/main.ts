@@ -84,7 +84,17 @@ async function executeQuery(query: string) {
   try {
     setStatus("Executing query...", "loading");
 
-    if (contextManager.hasVisual(query)) {
+    if (
+      contextManager.hasTabulate(query) &&
+      !contextManager.hasVisual(query)
+    ) {
+      // TABULATE: drop the rendered, self-contained HTML straight into the
+      // output container. The render output already inlines its own <style>
+      // block; no external JS runs against it.
+      const html = contextManager.executeTable(query);
+      vizOutput.innerHTML = html;
+      showProblems([], []);
+    } else if (contextManager.hasVisual(query)) {
       const result = contextManager.execute(query);
       const spec = JSON.parse(result);
 
