@@ -634,3 +634,39 @@ into the dataframe-preview branch.
 - `ggsql-jupyter/tests/test_compliance.py`: new `test_execute_tabulate`
   asserts gt_table marker, no vega-embed payload, no plot routing.
 - 25/25 ggsql-jupyter lib tests pass. Clippy clean.
+
+## 2026-06-24 — surfaces phase 2 (wasm + Quarto playground)
+
+Branch `agent/tabulate-surfaces-2-wasm`, five commits.
+
+- src/tabulate/execute.rs: gate the fixture-only `execute()` entry
+  point and `read_parquet_schema` helper behind `#[cfg(feature =
+  "duckdb")]` / `#[cfg(feature = "parquet")]` so the ggsql crate
+  compiles for the wasm crate's `vegalite,sqlite,builtin-data`
+  feature set. The previously-unconditional `use duckdb::{params,
+  Connection};` broke any non-duckdb build. Library-facing
+  `execute_with_reader` is unchanged.
+- ggsql-wasm/src/lib.rs: add `GgsqlContext::execute_table(query)` and
+  `has_tabulate(query)` methods. The first calls
+  `ggsql::tabulate::execute::execute_with_reader` against the
+  context's existing SqliteReader and returns the rendered HTML; the
+  second mirrors `has_visual` against `validate()`.
+- demo/src/context.ts: surface both methods on `WasmContextManager`
+  as `executeTable` / `hasTabulate`.
+- demo/src/main.ts: `executeQuery` becomes a three-arm branch in the
+  CLI/kernel priority order (tabulate > visual > sql); TABULATE
+  results land in `vizOutput.innerHTML` verbatim.
+- demo/src/quarto/main.ts: CellInfo grows `tableHtml` +
+  `tableContainer`; `ensureTableContainer` resolves the render target
+  (existing `vis-N` placeholder, else a synthesised
+  `ggsql-tabulate-output` div); both `initAndExecute` and
+  `executeCell` route through the three-arm branch.
+- demo/src/examples.ts: new `Tables` section with six TABULATE
+  examples (minimal, header+thousands, spanners, widths+align,
+  highlight, facet groups) — all self-contained (VALUES / UNION ALL),
+  no `ggsql:` builtin dependency.
+
+Verification: `cargo check --target wasm32-unknown-unknown
+-p ggsql-wasm` clean; `wasm-pack build --target web --dev` emits
+bindings carrying both new methods; `npx tsc --noEmit` clean; `npm
+run build` clean; 35/35 ggsql fixture tests still green.
