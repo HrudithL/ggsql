@@ -613,3 +613,24 @@ the `units` feature was removed; justification logged above.
 no-default-features + duckdb,parquet,vegalite,builtin-data feature
 set. Clippy only reports the two pre-existing
 src/writer/vegalite/layer.rs warnings.
+
+## 2026-06-24 — surfaces phase 1 (jupyter kernel)
+
+Branch `agent/tabulate-surfaces-1-kernel`, three commits.
+
+Wire TABULATE through the Jupyter kernel so notebook / Positron sessions
+render the gt-styled HTML inline beneath the cell, instead of falling
+into the dataframe-preview branch.
+
+- `ggsql-jupyter/src/executor.rs`: new `ExecutionResult::Table { html,
+  rows, cols }` variant. `QueryExecutor::execute` checks
+  `validated.has_tabulate() && !validated.has_visual()` before the
+  pure-SQL branch and calls `tabulate::execute::execute_with_reader`
+  on the existing reader, so `-- @connect:` swaps remain in effect.
+- `ggsql-jupyter/src/display.rs`: `format_table` wraps the rendered HTML
+  in a single `overflow:auto` div and emits a `text/html` + `text/plain`
+  MIME bundle. Crucially the bundle has no `output_location` field, so
+  Positron renders it inline rather than routing to the Plots pane.
+- `ggsql-jupyter/tests/test_compliance.py`: new `test_execute_tabulate`
+  asserts gt_table marker, no vega-embed payload, no plot routing.
+- 25/25 ggsql-jupyter lib tests pass. Clippy clean.
