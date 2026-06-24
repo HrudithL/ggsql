@@ -14,7 +14,11 @@ interface CellInfo {
   codeScaffold: HTMLElement;
   visId: string | null;
   visContainer: HTMLElement | null;
+  /** Container for rendered TABULATE HTML — defaults to `visContainer`, or a freshly synthesised div if none exists. */
+  tableContainer: HTMLElement | null;
   result: string | null;
+  /** Cached rendered HTML from `ctx.executeTable`. `null` for non-TABULATE cells. */
+  tableHtml: string | null;
   succeeded: boolean;
   error: string | null;
   editor: EditorInstance | null;
@@ -116,7 +120,9 @@ function gatherCells(): CellInfo[] {
       codeScaffold,
       visId,
       visContainer,
+      tableContainer: null,
       result: null,
+      tableHtml: null,
       succeeded: false,
       error: null,
       editor: null,
@@ -174,7 +180,14 @@ async function initAndExecute(
   for (let i = 0; i < total; i++) {
     const cell = cells[i];
     try {
-      if (ctx.hasVisual(cell.rewrittenQuery)) {
+      // Priority order matches the CLI / kernel: tabulate > visual > sql.
+      if (
+        ctx.hasTabulate(cell.rewrittenQuery) &&
+        !ctx.hasVisual(cell.rewrittenQuery)
+      ) {
+        cell.tableHtml = ctx.executeTable(cell.rewrittenQuery);
+        cell.result = null;
+      } else if (ctx.hasVisual(cell.rewrittenQuery)) {
         cell.result = ctx.execute(cell.rewrittenQuery);
       } else {
         ctx.executeSql(cell.rewrittenQuery);
@@ -203,6 +216,30 @@ async function initAndExecute(
 // ---------------------------------------------------------------------------
 
 const DEBOUNCE_MS = 100;
+
+/**
+ * Pick the DOM node a TABULATE cell should render its HTML into.
+ *
+ * Prefer the same `vis-N` placeholder Quarto generates for vega-lite output
+ * (some doc-templates emit it for every ggsql cell, regardless of clause).
+ * If that placeholder is absent — e.g. a TABULATE-only cell where the doc
+ * pipeline skipped the vis placeholder — synthesise a sibling div sitting
+ * immediately after the editor wrapper. We cache on the cell so live
+ * re-renders don't keep creating new containers.
+ */
+function ensureTableContainer(cell: CellInfo): HTMLElement {
+  if (cell.tableContainer) return cell.tableContainer;
+  if (cell.visContainer) {
+    cell.tableContainer = cell.visContainer;
+    return cell.visContainer;
+  }
+  const container = document.createElement("div");
+  container.className = "ggsql-tabulate-output";
+  container.style.overflow = "auto";
+  cell.cellDiv.appendChild(container);
+  cell.tableContainer = container;
+  return container;
+}
 
 async function applyEditors(
   cells: CellInfo[],
@@ -245,6 +282,9 @@ async function applyEditors(
       } catch (e) {
         console.warn("[ggsql-quarto] vegaEmbed failed for", cell.visId, e);
       }
+    } else if (cell.tableHtml) {
+      const container = ensureTableContainer(cell);
+      container.innerHTML = cell.tableHtml;
     }
 
     // Re-execute on every edit, debounced
@@ -306,7 +346,15 @@ async function executeCell(
   const currentQuery = rewriteCsvRefs(editorInst.getValue());
 
   try {
-    if (ctx.hasVisual(currentQuery)) {
+    if (
+      ctx.hasTabulate(currentQuery) &&
+      !ctx.hasVisual(currentQuery)
+    ) {
+      const html = ctx.executeTable(currentQuery);
+      cell.tableHtml = html;
+      const container = ensureTableContainer(cell);
+      container.innerHTML = html;
+    } else if (ctx.hasVisual(currentQuery)) {
       const result = ctx.execute(currentQuery);
       const spec = JSON.parse(result);
 
