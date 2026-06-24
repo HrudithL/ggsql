@@ -1,6 +1,19 @@
 ## [Unreleased]
 
 ### Added
+- TABULATE output now renders end-to-end through the non-CLI surfaces.
+  The Jupyter kernel (`ggsql-jupyter`) emits the gt-styled HTML inline
+  beneath the cell via a new `ExecutionResult::Table` variant and a
+  `format_table` display formatter that omits the `output_location`
+  field — so Positron renders the table in the inline output slot rather
+  than routing it to the Plots pane. The WASM bindings (`ggsql-wasm`)
+  expose `GgsqlContext::execute_table` and `has_tabulate`; the browser
+  playground and Quarto cell handler in `ggsql-wasm/demo/` route
+  TABULATE queries through them in the same `tabulate > visual > sql`
+  priority order as the CLI, and a new `Tables` examples section
+  showcases six TABULATE patterns. The VS Code / Positron extension
+  (`ggsql-vscode`) needs no changes — it is a pure runtime-discovery
+  wrapper and inherits TABULATE support transparently from the kernel.
 - New `AdbcReader<D: Driver>` for connecting to data sources via
   [ADBC](https://arrow.apache.org/adbc/) (Arrow Database Connectivity), behind
   a new off-by-default `adbc` feature flag. Generic over any concrete
