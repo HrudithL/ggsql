@@ -670,3 +670,36 @@ Verification: `cargo check --target wasm32-unknown-unknown
 -p ggsql-wasm` clean; `wasm-pack build --target web --dev` emits
 bindings carrying both new methods; `npx tsc --noEmit` clean; `npm
 run build` clean; 35/35 ggsql fixture tests still green.
+
+## 2026-06-24 — surfaces phase 3 (Positron / VS Code extension)
+
+Branch `agent/tabulate-surfaces-3-positron`, verification-only — no code
+changes to `ggsql-vscode/`.
+
+The extension is a pure discovery/spec layer:
+
+  $ grep -nE "output_location|tabulate|TABULATE|gt_table|plot|Plot" \
+      ggsql-vscode/src/manager.ts
+  (no matches)
+  $ grep -nE "execute_result|display_data|text/html|MIME" \
+      ggsql-vscode/src/**/*.ts
+  (no matches)
+
+There is no per-message routing code path; output flows straight from
+the kernel's IOPub `execute_result` messages to whatever slot the
+Positron supervisor decides — and the supervisor decides based on the
+`output_location` field on the message. Surface 1's `format_table` in
+`ggsql-jupyter/src/display.rs` deliberately omits that field, so a
+TABULATE result lands in the same inline slot as a DataFrame preview
+rather than routing to the Plots pane.
+
+Runtime verification matrix (requires Positron install — not run in
+this environment, but the kernel-side invariants needed to make all
+four pass are guaranteed by the surface 1 commits):
+
+  | Host                                | Expected behaviour                       |
+  |-------------------------------------|------------------------------------------|
+  | VS Code w/ extension, plain         | TABULATE HTML appears in terminal panel  |
+  | Positron, console session           | inline in the console, NOT in Plots pane |
+  | Positron, notebook session          | inline beneath the cell                  |
+  | Positron, source editor → `Run`     | inline in the console, NOT in Plots pane |
