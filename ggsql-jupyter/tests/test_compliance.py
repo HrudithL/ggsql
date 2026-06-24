@@ -118,6 +118,54 @@ class ggsqlKernelTests(jkt.KernelTests):
         self.assertIn("$schema", vega_spec)
         self.assertIn("data", vega_spec)
 
+    # Test TABULATE output
+    def test_execute_tabulate(self):
+        """TABULATE output: HTML table inline, no vega payload, no plot routing."""
+        self.flush_channels()
+
+        code = "SELECT 1 AS x, 2 AS y TABULATE x, y"
+
+        reply, output_msgs = self.execute_helper(code=code)
+
+        self.assertEqual(reply["content"]["status"], "ok")
+
+        execute_result = next(
+            (m for m in output_msgs if m["msg_type"] == "execute_result"),
+            None,
+        )
+        self.assertIsNotNone(execute_result, "No execute_result for TABULATE query")
+
+        content = execute_result["content"]
+        data = content["data"]
+
+        # HTML payload with the gt_table marker class
+        self.assertIn("text/html", data)
+        self.assertIn(
+            "gt_table",
+            data["text/html"],
+            "TABULATE HTML must carry the gt_table class",
+        )
+        # text/plain summary
+        self.assertIn("text/plain", data)
+        self.assertIn("TABULATE table", data["text/plain"])
+
+        # Must NOT carry a Vega-Lite MIME bundle
+        self.assertNotIn("application/vnd.vegalite.v6+json", data)
+        # Must NOT include any vega-embed loader payload
+        for forbidden in ("vega-embed", "vegaEmbed", "requirejs", "cdn.jsdelivr.net"):
+            self.assertNotIn(
+                forbidden,
+                data["text/html"],
+                f"TABULATE HTML must not embed {forbidden!r}",
+            )
+
+        # Must NOT route to Positron's Plots pane
+        self.assertNotEqual(
+            content.get("output_location"),
+            "plot",
+            "TABULATE output must render inline, not in the Plots pane",
+        )
+
     # Test error handling
     def test_execute_error(self):
         """Test that errors are properly reported."""
