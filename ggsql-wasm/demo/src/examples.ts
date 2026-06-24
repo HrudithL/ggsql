@@ -211,4 +211,114 @@ VISUALISE
 DRAW point MAPPING bill_len AS x, bill_dep AS y, body_mass AS size
 LABEL title => 'Penguin Measurements', x => 'Bill Length (mm)', y => 'Bill Depth (mm)'`,
   },
+
+  // === Tables (TABULATE) ===
+  {
+    section: "Tables",
+    name: "Minimal",
+    query: `-- The minimal TABULATE query: bare TABULATE renders every column,
+-- in source order, with default gt-style formatting.
+SELECT
+  'Acme'             AS company, 120000 AS revenue, 18 AS employees UNION ALL SELECT
+  'Globex',                       98000,            12              UNION ALL SELECT
+  'Initech',                      54000,             7              UNION ALL SELECT
+  'Umbrella',                    210000,            24              UNION ALL SELECT
+  'Stark Industries',            480000,            55
+TABULATE`,
+  },
+  {
+    section: "Tables",
+    name: "Title + thousands",
+    query: `-- LABEL adds a styled header; FORMAT … RENAMING applies a printf-style
+-- numeric format. The '\\'' flag is locale-aware thousands grouping.
+SELECT
+  'Acme'             AS company, 1200000 AS revenue, 1825 AS employees UNION ALL SELECT
+  'Globex',                       980000,             1212              UNION ALL SELECT
+  'Initech',                      540500,              704              UNION ALL SELECT
+  'Umbrella',                   2100000,             2430              UNION ALL SELECT
+  'Stark Industries',           4800500,             5512
+TABULATE company, revenue, employees
+FORMAT revenue, employees RENAMING * => '{:num %\\'d}'
+LABEL
+  title    => 'Top customers, FY26',
+  subtitle => 'Revenue and headcount snapshot'`,
+  },
+  {
+    section: "Tables",
+    name: "Spanners",
+    query: `-- FORMAT SPAN groups columns under a shared header row; spanners can
+-- nest. STUB lifts a column out as a row identifier.
+SELECT
+  'Acme'             AS company,
+  1200000            AS revenue_2025, 1825 AS employees_2025,
+  1450000            AS revenue_2026, 1990 AS employees_2026 UNION ALL SELECT
+  'Globex',           980000, 1212, 1100000, 1305            UNION ALL SELECT
+  'Initech',          540500,  704,  610000,  742            UNION ALL SELECT
+  'Umbrella',        2100000, 2430, 2380000, 2615
+TABULATE company, revenue_2025, employees_2025, revenue_2026, employees_2026
+FORMAT STUB company
+FORMAT SPAN revenue_2025, employees_2025 AS y2025
+FORMAT SPAN revenue_2026, employees_2026 AS y2026
+FORMAT SPAN y2025, y2026                 AS snapshot
+FORMAT revenue_2025, revenue_2026, employees_2025, employees_2026
+  RENAMING * => '{:num %\\'d}'
+LABEL
+  revenue_2025   => 'Revenue (USD)',
+  employees_2025 => 'Headcount',
+  revenue_2026   => 'Revenue (USD)',
+  employees_2026 => 'Headcount',
+  y2025          => 'FY2025',
+  y2026          => 'FY2026',
+  snapshot       => 'Two-year snapshot'`,
+  },
+  {
+    section: "Tables",
+    name: "Widths + align",
+    query: `-- FORMAT … SETTING width fixes column widths (table-layout: fixed);
+-- align overrides the auto-aligned default.
+SELECT
+  'Acme'             AS company, 1200000 AS revenue, 18 AS employees UNION ALL SELECT
+  'Globex',                       980000,            12              UNION ALL SELECT
+  'Initech',                      540500,             7              UNION ALL SELECT
+  'Umbrella',                    2100000,            24              UNION ALL SELECT
+  'Stark Industries',            4800500,            55
+TABULATE company, revenue, employees
+FORMAT company   SETTING width => '200px'
+FORMAT revenue   SETTING width => '120px', align => 'right'
+  RENAMING * => '{:num %\\'d}'
+FORMAT employees SETTING width => '100px', align => 'center'`,
+  },
+  {
+    section: "Tables",
+    name: "Highlight",
+    query: `-- HIGHLIGHT <col> FILTER <SQL predicate> SETTING <key> => <value>
+-- flags individual cells whose row matches the predicate.
+SELECT * FROM (VALUES
+  ('Alice',  92, 'A'),
+  ('Bob',    58, 'F'),
+  ('Carla',  74, 'C'),
+  ('Dan',    45, 'F'),
+  ('Eve',    88, 'B'),
+  ('Frank',  67, 'D')
+) AS students(name, score, grade)
+TABULATE name, score, grade
+HIGHLIGHT score
+  FILTER score < 60
+  SETTING face => 'bold', color => 'red'`,
+  },
+  {
+    section: "Tables",
+    name: "Facet groups",
+    query: `-- FACET <col> groups body rows by the named column. A heading row
+-- appears before each group; the grouping column drops out of the body.
+SELECT * FROM (VALUES
+  ('Hardware', 'Widget',     45000, 450),
+  ('Hardware', 'Gadget',     62000, 620),
+  ('Software', 'Gizmo',      38000, 380),
+  ('Software', 'Doohickey',  51000, 510)
+) AS sales(category, product, revenue, units)
+TABULATE product, revenue, units
+FACET category
+FORMAT revenue RENAMING * => '{:num %\\'d}'`,
+  },
 ];

@@ -28,8 +28,16 @@ export class WasmContextManager {
     return this.getContext().has_visual(query);
   }
 
+  hasTabulate(query: string): boolean {
+    return this.getContext().has_tabulate(query);
+  }
+
   executeSql(query: string): string {
     return this.getContext().execute_sql(query);
+  }
+
+  executeTable(query: string): string {
+    return this.getContext().execute_table(query);
   }
 
   registerCSV(name: string, data: Uint8Array): void {

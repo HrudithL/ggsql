@@ -18,9 +18,12 @@ use crate::{GgsqlError, Result};
 use arrow::array::{Array, ArrayRef, Float64Array, StringArray};
 use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
+#[cfg(feature = "duckdb")]
 use duckdb::{params, Connection};
+#[cfg(feature = "parquet")]
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use std::collections::HashMap;
+#[cfg(feature = "parquet")]
 use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;
@@ -242,6 +245,12 @@ impl HeaderNode {
 
 /// Parse `query`, execute against `data_path`, apply TABULATE transforms, and
 /// return the table IR.
+///
+/// Fixture-test entry point: registers the parquet file as a DuckDB view
+/// and runs the assembled SQL through DuckDB. Only compiled when the
+/// `duckdb` feature is enabled (the test harness needs it; the wasm
+/// build, which uses `sqlite` only, does not).
+#[cfg(feature = "duckdb")]
 pub fn execute(query: &str, data_path: &Path) -> Result<TableIr> {
     // 1. Parse the TABULATE statement.
     let source = SourceTree::new(query)?;
@@ -1579,6 +1588,7 @@ fn build_row_groups(
 // ============================================================================
 
 /// Read the Apache Arrow schema embedded in a Parquet file without loading data.
+#[cfg(feature = "parquet")]
 fn read_parquet_schema(path: &Path) -> Result<Arc<Schema>> {
     let file = File::open(path).map_err(|e| {
         GgsqlError::ReaderError(format!("Cannot open parquet '{}': {}", path.display(), e))

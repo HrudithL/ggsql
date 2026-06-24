@@ -320,4 +320,31 @@ impl GgsqlContext {
 
         array.into()
     }
+
+    /// Execute a TABULATE query and return rendered, self-contained HTML.
+    ///
+    /// The returned string is the same gt-styled output that the CLI's
+    /// `ggsql run --writer html` and the Jupyter kernel emit: inlined
+    /// `<style>` block, no external JS, no vega-embed bootstrap. The
+    /// caller is expected to drop the HTML into the visualisation
+    /// container as-is via `innerHTML`.
+    pub fn execute_table(&self, query: &str) -> Result<String, JsValue> {
+        let reader = self.reader.borrow();
+        let ir = ggsql::tabulate::execute::execute_with_reader(&*reader, query)
+            .map_err(|e| JsValue::from_str(&format!("TABULATE error: {:?}", e)))?;
+        Ok(ggsql::tabulate::html::render(&ir))
+    }
+
+    /// Whether the query contains a `TABULATE` clause.
+    ///
+    /// Mirrors `has_visual` for the parallel `VISUALISE` clause. Callers
+    /// use the pair to pick between the three render paths:
+    /// `has_tabulate && !has_visual` → table, `has_visual` → vega-lite,
+    /// neither → SQL preview.
+    pub fn has_tabulate(&self, query: &str) -> bool {
+        match validate(query) {
+            Ok(v) => v.has_tabulate(),
+            Err(_) => false,
+        }
+    }
 }
