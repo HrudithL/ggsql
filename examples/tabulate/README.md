@@ -95,7 +95,7 @@ a browser:
 | [`37_facet_multi_aggregate.ggsql`](37_facet_multi_aggregate.ggsql) | Multiple aggregates (`min`, `max`, `mean`) with custom `label` overrides |
 | [`38_case_title.ggsql`](38_case_title.ggsql) | `RENAMING * => '{:title}'` — title-case each cell (first letter of every word) |
 | [`39_case_upper_lower.ggsql`](39_case_upper_lower.ggsql) | `{:upper}` and `{:lower}` — normalise text to a single case |
-| [`40_unit_in_label.ggsql`](40_unit_in_label.ggsql) | Put a Unicode unit annotation in `LABEL <col> => 'Land Area (km²)'`. There is no separate `units` SETTING — anything beyond the column name belongs in LABEL. |
+| [`40_unit_in_label.ggsql`](40_unit_in_label.ggsql) | Inline `^N` / `_N` super/subscript markup in `LABEL <col> => '... km^2'`. No separate `units` SETTING — anything beyond the column name belongs in LABEL. |
 | [`41_forced_sign_growth.ggsql`](41_forced_sign_growth.ggsql) | `{:num +.1f}%` — forced-sign percent (positives `+`, negatives Unicode `−`) |
 | [`42_comprehensive_report.ggsql`](42_comprehensive_report.ggsql) | Integration: SQL CTE → header + spanner + per-column formats + SCALE + HIGHLIGHT + FACET summary, end-to-end |
 | [`43_raw_passthrough.ggsql`](43_raw_passthrough.ggsql) | `RENAMING * => '${} USD'` — raw `{}` passthrough with literal prefix/suffix; no formatter applied |
@@ -107,4 +107,5 @@ a browser:
 | [`49_scale_foreground.ggsql`](49_scale_foreground.ggsql) | `SCALE foreground FROM (lo, hi) TO ('<lo>', '<hi>')` — continuous text-colour ramp |
 | [`50_scale_size.ggsql`](50_scale_size.ggsql) | `SCALE size FROM (lo, hi) TO ('12px', '28px')` — continuous font-size ramp |
 | [`51_scale_opacity.ggsql`](51_scale_opacity.ggsql) | `SCALE opacity FROM (lo, hi) TO ('0.2', '1.0')` — modulates the alpha on a composed `SCALE background` (renders as `rgba(...)`) |
-| [`52_format_wildcard.ggsql`](52_format_wildcard.ggsql) | `FORMAT * RENAMING null => '—'` — wildcard `*` applies the clause to every visible column (table-wide null substitution) |
+| [`52_format_wildcard.ggsql`](52_format_wildcard.ggsql) | `FORMAT * RENAMING null => '---'` — wildcard `*` applies the clause to every visible column; `---` is converted to an em-dash by gt's smart-text processor (table-wide null substitution) |
+| [`53_label_markup.ggsql`](53_label_markup.ggsql) | LABEL text supports inline markup: `^N` / `_N` for super/subscript, braced `^{...}` / `_{...}` for arbitrary content, and gt's smart-text `---` / `--` / `...` substitutions |

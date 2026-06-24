@@ -1,7 +1,12 @@
--- Units in column headers are written into the LABEL text directly,
--- using Unicode characters for superscripts (²) or other typography.
--- There is no separate `SETTING units => '...'` key — anything beyond
--- the column's display name belongs in the LABEL string.
+-- Inline superscripts (and subscripts) in LABEL text use a gt-style
+-- `^N` / `_N` markup: `^2` renders as ², `_2` renders as ₂. The
+-- bare-run N accepts an optional sign + one or more digits
+-- (`^2`, `^-2`, `_10`). For anything richer -- letters, spaces,
+-- punctuation -- use the braced form `^{ ... }` / `_{ ... }`.
+--
+-- This is the canonical way to annotate column headers with units;
+-- there is no separate `SETTING units` key. See example 53 for the
+-- full markup reference.
 SELECT * FROM (VALUES
   ('Tokyo',     2194.07, 6168.7),
   ('Osaka',      225.21, 12012.2),
@@ -15,5 +20,5 @@ FORMAT land_area
 FORMAT pop_density
   RENAMING * => '{:num %\'d}'
 LABEL
-  land_area   => 'Land Area (km²)',
-  pop_density => 'Pop Density (people/km²)'
+  land_area   => 'Land Area km^2',
+  pop_density => 'Pop Density people/km^2'

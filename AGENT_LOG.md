@@ -580,3 +580,36 @@ merged each phase into `main` along the way. Summary:
 
 Two allowed_diff additions were introduced (both in fixture 32) when
 the `units` feature was removed; justification logged above.
+
+## 2026-06-24 — LABEL inline markup; example 52 em-dash housekeeping
+
+- src/tabulate/html.rs gains a `label_markup` helper that runs
+  user-supplied LABEL text through two transformations:
+    1. `^N` / `_N` super/subscript markup (bare-run = optional sign +
+       digits; braced form `^{...}` / `_{...}` for arbitrary content),
+       producing the same `<span><sup|sub>...</sup|sub></span>` markup
+       gt emits for `cols_units`.
+    2. Smart-text substitutions (`---` → em-dash, `--` → en-dash,
+       `...` → ellipsis) — the same ones gt's markdown processor
+       applies to sub_missing replacement text.
+- ColMeta and HeaderNode::Spanner gain a `label_is_user: bool` flag.
+  Default labels (column name / spanner ID) keep their underscores
+  literal — only user-supplied LABEL text is run through `label_markup`.
+- Fixture 32 rewritten to use `LABEL land_area_km2 => 'Land Area km^2'`
+  etc. The captured expected.html now matches BYTE-FOR-BYTE: the
+  `allowed_diff` workaround introduced in the original Phase 3 commit
+  is removed.
+- Example 40 (`40_unit_in_label.ggsql`) rewritten to use the `^N`
+  syntax; comment header explains the bare-run rule and points at
+  example 53 for the full reference.
+- Example 52 (`52_format_wildcard.ggsql`): the literal em-dash `'—'`
+  in the source is replaced with `'---'` (smart-text → em-dash). The
+  rendered output is the same em-dash. README updated.
+- New example 53 (`53_label_markup.ggsql`): focused walkthrough of
+  the LABEL markup processor.
+- 9 new label_markup unit tests in src/tabulate/html.rs.
+
+35/35 fixture tests, 1550/1550 lib tests pass under the
+no-default-features + duckdb,parquet,vegalite,builtin-data feature
+set. Clippy only reports the two pre-existing
+src/writer/vegalite/layer.rs warnings.

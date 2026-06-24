@@ -112,6 +112,12 @@ pub struct ColMeta {
     pub name: String,
     /// Display label shown in `<th>` (defaults to `name`).
     pub label: String,
+    /// True when [`Self::label`] came from a user-supplied `LABEL`
+    /// clause; false when it is the default (the column name). The
+    /// HTML writer runs user-supplied labels through markup
+    /// processing (`^N` superscript, `_N` subscript, smart-text
+    /// substitutions) and default labels through plain HTML escaping.
+    pub label_is_user: bool,
     /// Alignment.
     pub align: ColAlign,
     /// Explicit column width from `FORMAT <col> SETTING width => '<css>'`.
@@ -200,6 +206,10 @@ pub enum HeaderNode {
         id: String,
         /// Display text rendered inside the spanner cell.
         label: String,
+        /// True when [`Self::label`] came from a user-supplied
+        /// `LABEL <span_id> => '...'` clause; false when it is the
+        /// default (the bareword span ID).
+        label_is_user: bool,
         /// Child nodes in display order.
         children: Vec<HeaderNode>,
     },
@@ -486,13 +496,16 @@ fn build_table_ir(
             } else {
                 col_name.to_string()
             };
+            let mut label_is_user = false;
             if let Some(s) = label_map.get(&col_name.to_ascii_lowercase()) {
                 label = s.clone();
+                label_is_user = true;
             }
             if let Some((stub_name, Some(span_id))) = &stub_info {
                 if stub_name.eq_ignore_ascii_case(col_name) {
                     if let Some(s) = label_map.get(&span_id.to_ascii_lowercase()) {
                         label = s.clone();
+                        label_is_user = true;
                     }
                 }
             }
@@ -500,6 +513,7 @@ fn build_table_ir(
             ColMeta {
                 name: col_name.to_string(),
                 label,
+                label_is_user,
                 align,
                 width,
                 raw_html: false,
@@ -527,6 +541,7 @@ fn build_table_ir(
             ColMeta {
                 name: String::new(),
                 label: String::new(),
+                label_is_user: false,
                 align: ColAlign::Left,
                 width: None,
                 raw_html: false,
@@ -893,13 +908,14 @@ fn build_header_forest(
                 children.push(nodes[i].clone());
             }
         }
-        let label = label_map
-            .get(&span_id.to_ascii_lowercase())
-            .cloned()
-            .unwrap_or_else(|| span_id.clone());
+        let (label, label_is_user) = match label_map.get(&span_id.to_ascii_lowercase()) {
+            Some(s) => (s.clone(), true),
+            None => (span_id.clone(), false),
+        };
         let spanner = HeaderNode::Spanner {
             id: span_id.clone(),
             label,
+            label_is_user,
             children,
         };
         // Remove matched entries and insert the new spanner at the first

@@ -607,6 +607,26 @@ LABEL
   "title" => 'Article Title'     -- labels a column named "title" (quoted identifier)
 ```
 
+**Inline markup.** Every label string supplied through `LABEL` (title,
+subtitle, caption, column label, spanner label) is run through a small
+markup processor before being emitted as HTML. Two transformations
+apply:
+
+1. `^N` wraps `N` in a `<sup>`; `_N` wraps it in a `<sub>`. The
+   bare-run `N` accepts an optional `+`/`-` followed by one or more
+   digits (`^2`, `^-2`, `_10`), so the common units / chemistry
+   spellings just work: `'Land Area km^2'` renders `km²`, `'H_2O'`
+   renders `H₂O`, `'m^-2'` renders `m⁻²`. For any other content
+   (letters, spaces, punctuation) use the braced form `^{...}` /
+   `_{...}` (`'Var_{total count}'`).
+2. The same smart-text substitutions gt's markdown processor uses:
+   `---` → em-dash, `--` → en-dash, `...` → horizontal ellipsis.
+
+Default labels — the ones inferred from a column or spanner identifier
+when no `LABEL` clause overrides them — are **not** run through the
+markup processor, so a column literally named `pop_2016` keeps that
+exact text in its header.
+
 **Example:**
 ```sql
 SELECT * FROM sales

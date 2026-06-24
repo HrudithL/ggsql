@@ -1,0 +1,24 @@
+-- The LABEL clause runs its text through a small markup processor:
+--
+--   ^N    -> <sup>N</sup>    e.g. `km^2` renders as km²
+--   _N    -> <sub>N</sub>    e.g. `H_2O` renders as H₂O
+--
+-- The bare-run N is an optional sign followed by one or more digits
+-- (`^2`, `^-2`, `_10`). For any other content -- letters, spaces,
+-- punctuation -- use the braced form:
+--
+--   ^{ ... }  /  _{ ... }    arbitrary content up to the matching `}`
+--
+-- The processor also runs the smart-text substitutions inherited
+-- from gt's markdown processor: `---` becomes an em-dash, `--` an
+-- en-dash, `...` a horizontal ellipsis.
+SELECT * FROM (VALUES
+  ('CO2 emissions',     415.0),
+  ('H2O concentration',   0.05),
+  ('Earth (10^9 t)',      8.1)
+) AS rows(metric, value)
+TABULATE metric, value
+FORMAT STUB metric
+LABEL
+  metric => 'Metric',
+  value  => 'Value (10^9) --- per ^{day}'

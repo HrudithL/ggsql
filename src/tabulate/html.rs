@@ -384,7 +384,7 @@ pub fn render(table: &TableIr) -> String {
             ncols,
             cls,
             td_style,
-            html_escape(title),
+            label_markup(title),
         ));
     }
     if let Some(subtitle) = &table.subtitle {
@@ -395,7 +395,7 @@ pub fn render(table: &TableIr) -> String {
             HEADING_TR_STYLE,
             ncols,
             SUBTITLE_TD_STYLE,
-            html_escape(subtitle),
+            label_markup(subtitle),
         ));
     }
 
@@ -510,7 +510,7 @@ pub fn render(table: &TableIr) -> String {
             SOURCENOTES_TR_STYLE,
             ncols,
             SOURCENOTE_TD_STYLE,
-            html_escape(caption),
+            label_markup(caption),
         ));
     }
 
@@ -549,7 +549,11 @@ fn render_th(col: &ColMeta, is_stub: bool, rowspan: usize) -> String {
     } else {
         col.name.as_str()
     };
-    let label_html = html_escape(&col.label);
+    let label_html = if col.label_is_user {
+        label_markup(&col.label)
+    } else {
+        html_escape(&col.label)
+    };
     format!(
         "      <th class=\"gt_col_heading gt_columns_bottom_border {}\" \
          rowspan=\"{}\" colspan=\"1\" scope=\"col\" id=\"{}\" \
@@ -690,6 +694,7 @@ fn collect_header_cells(
         HeaderNode::Spanner {
             id: _,
             label,
+            label_is_user,
             children,
         } => {
             let span_row = max_height - node.height();
@@ -709,6 +714,11 @@ fn collect_header_cells(
                     is_spanner_outer: true,
                 });
             } else if row == span_row {
+                let label_html = if *label_is_user {
+                    label_markup(label)
+                } else {
+                    html_escape(label)
+                };
                 let markup = format!(
                     "      <th class=\"gt_center gt_columns_top_border gt_column_spanner_outer\" \
                      rowspan=\"1\" colspan=\"{}\" scope=\"colgroup\" id=\"{}\" \
@@ -718,7 +728,7 @@ fn collect_header_cells(
                     html_escape(label),
                     SPANNER_OUTER_BASE_PREFIX,
                     SPANNER_DIV_STYLE,
-                    html_escape(label),
+                    label_html,
                 );
                 out.push(HeaderCell {
                     markup,
@@ -981,7 +991,7 @@ fn render_summary_tr(
                 summary_stub_id,
                 class_suffix,
                 style,
-                html_escape(&sr.label),
+                label_markup(&sr.label),
             )
         } else {
             let align = col.align;
@@ -1035,6 +1045,97 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
+/// Render user-supplied *display* text (column labels, spanner labels,
+/// table title/subtitle/caption, FACET summary-row labels) as HTML.
+/// Performs two transformations on top of HTML escaping:
+///
+/// 1. The "smart text" substitutions used by gt's markdown processor:
+///    `---` → em-dash, `--` → en-dash, `...` → horizontal ellipsis.
+/// 2. Inline superscript / subscript markup:
+///    - `^X` where X is a run of alphanumeric / `-` characters wraps
+///      X in `<sup>` (e.g. `km^2` → `km²`, `m^-2` → `m⁻²`).
+///    - `_X` (same rule) wraps X in `<sub>`.
+///    - The braced forms `^{...}` and `_{...}` accept any content,
+///      including spaces and punctuation, until the matching `}`.
+///
+/// Use [`html_escape`] for data values and HTML attribute values where
+/// these transformations would be inappropriate.
+fn label_markup(s: &str) -> String {
+    // Smart-text first: pass through to a String so the `^` / `_`
+    // walker below sees the substituted form (em-dash, etc.).
+    let s = s
+        .replace("---", "\u{2014}")
+        .replace("--", "\u{2013}")
+        .replace("...", "\u{2026}");
+
+    fn push_esc(out: &mut String, c: char) {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(c),
+        }
+    }
+    fn push_subsup(out: &mut String, tag: &str, inner: &str) {
+        out.push_str("<span style=\"white-space:nowrap;\"><");
+        out.push_str(tag);
+        out.push_str(" style=\"line-height:0;\">");
+        out.push_str(&html_escape(inner));
+        out.push_str("</");
+        out.push_str(tag);
+        out.push_str("></span>");
+    }
+
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if (b == b'^' || b == b'_') && i + 1 < bytes.len() {
+            let tag = if b == b'^' { "sup" } else { "sub" };
+            // Braced form: `^{...}` / `_{...}`. Consumes everything up
+            // to the matching `}`.
+            if bytes[i + 1] == b'{' {
+                if let Some(rel_end) = s[i + 2..].find('}') {
+                    let inner = &s[i + 2..i + 2 + rel_end];
+                    push_subsup(&mut out, tag, inner);
+                    i = i + 2 + rel_end + 1;
+                    continue;
+                }
+            }
+            // Bare run: an optional leading `+` or `-` followed by one
+            // or more digits. This handles the common cases (`km^2`,
+            // `m^-2`, `H_2O`) while keeping `_word` / `^word` available
+            // for the braced form (`H_{total}`).
+            let start = i + 1;
+            let mut j = start;
+            if j < bytes.len() && (bytes[j] == b'+' || bytes[j] == b'-') {
+                j += 1;
+            }
+            let digits_start = j;
+            while j < bytes.len() && bytes[j].is_ascii_digit() {
+                j += 1;
+            }
+            if j > digits_start {
+                push_subsup(&mut out, tag, &s[start..j]);
+                i = j;
+                continue;
+            }
+            // No braced form and no following run: emit the marker
+            // literally (escaped).
+            push_esc(&mut out, b as char);
+            i += 1;
+            continue;
+        }
+        // Default path: forward a single UTF-8 character (escaping the
+        // HTML metacharacters).
+        let ch = s[i..].chars().next().unwrap();
+        push_esc(&mut out, ch);
+        i += ch.len_utf8();
+    }
+    out
+}
+
 /// Convert an uppercase `#RRGGBB` plus a 0..=1 alpha into a CSS
 /// `background-color: rgba(r, g, b, a);` declaration. Returns None if
 /// the hex doesn't parse.
@@ -1051,4 +1152,76 @@ fn css_rgba(hex: &str, alpha: f32) -> Option<String> {
         "background-color: rgba({}, {}, {}, {:.3});",
         r, g, b, a
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn label_markup_super_simple() {
+        assert_eq!(
+            label_markup("km^2"),
+            "km<span style=\"white-space:nowrap;\"><sup style=\"line-height:0;\">2</sup></span>"
+        );
+    }
+    #[test]
+    fn label_markup_sub_simple() {
+        assert_eq!(
+            label_markup("H_2O"),
+            "H<span style=\"white-space:nowrap;\"><sub style=\"line-height:0;\">2</sub></span>O"
+        );
+    }
+    #[test]
+    fn label_markup_super_with_dash_run() {
+        // `m^-2` (m to the negative 2) — the run includes `-`.
+        assert_eq!(
+            label_markup("m^-2"),
+            "m<span style=\"white-space:nowrap;\"><sup style=\"line-height:0;\">-2</sup></span>"
+        );
+    }
+    #[test]
+    fn label_markup_braced_super() {
+        assert_eq!(
+            label_markup("E=mc^{2+x}"),
+            "E=mc<span style=\"white-space:nowrap;\"><sup style=\"line-height:0;\">2+x</sup></span>"
+        );
+    }
+    #[test]
+    fn label_markup_braced_sub_multiword() {
+        assert_eq!(
+            label_markup("Var_{total count}"),
+            "Var<span style=\"white-space:nowrap;\"><sub style=\"line-height:0;\">total count</sub></span>"
+        );
+    }
+    #[test]
+    fn label_markup_smart_text() {
+        assert_eq!(label_markup("dash --- end"), "dash \u{2014} end");
+        assert_eq!(label_markup("range -- here"), "range \u{2013} here");
+        assert_eq!(label_markup("etc..."), "etc\u{2026}");
+    }
+    #[test]
+    fn label_markup_html_escape_passthrough() {
+        // Non-markup characters get plain HTML escaping; literal
+        // angle brackets must not become tags.
+        assert_eq!(label_markup("a < b & c > d"), "a &lt; b &amp; c &gt; d");
+    }
+    #[test]
+    fn label_markup_caret_without_run_is_literal() {
+        // A `^` with no alphanumeric run after it (and no brace)
+        // renders as an escaped literal.
+        assert_eq!(label_markup("read ^ ten"), "read ^ ten");
+        assert_eq!(label_markup("foo ^"), "foo ^");
+    }
+    #[test]
+    fn label_markup_underscore_word_is_subscript() {
+        // `_word` is NOT consumed by the bare-run rule (which only
+        // accepts an optional sign + digits); use `_{word}` instead.
+        // A `_` followed by a letter renders as a literal `_`.
+        assert_eq!(label_markup("H_total"), "H_total");
+        assert_eq!(
+            label_markup("H_{total}"),
+            "H<span style=\"white-space:nowrap;\"><sub style=\"line-height:0;\">total</sub></span>"
+        );
+    }
 }

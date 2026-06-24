@@ -6,5 +6,5 @@ FORMAT land_area_km2
 FORMAT density_2021
   RENAMING * => '{:num %\'d}'
 LABEL
-  land_area_km2 => 'Land Area (km²)',
-  density_2021  => 'Density (people/km²)'
+  land_area_km2 => 'Land Area km^2',
+  density_2021  => 'Density people/km^2'

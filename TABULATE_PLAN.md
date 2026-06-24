@@ -291,6 +291,14 @@ LABEL
 - `<id>` may be either a column name or a spanner ID introduced by
   `FORMAT SPAN ... AS <id>` (fixture 8: `population`, `density`,
   `comparison`).
+- **Inline label markup.** Every user-supplied LABEL string runs
+  through `label_markup` in [`src/tabulate/html.rs`](src/tabulate/html.rs):
+  `^N` → `<sup>N</sup>` and `_N` → `<sub>N</sub>` for a bare-digit
+  run (`^2`, `^-2`, `_10`); `^{...}` / `_{...}` for arbitrary
+  content. Smart-text substitutions (`---` → em-dash, `--` → en-dash,
+  `...` → horizontal ellipsis) also apply. Default labels (column
+  name / spanner ID when no LABEL clause overrides) are escaped
+  plain so `pop_2016` keeps the underscore literal.
 
 ---
 

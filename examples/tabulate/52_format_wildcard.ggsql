@@ -1,7 +1,10 @@
 -- `FORMAT *` is a wildcard that applies the clause to every visible
 -- column. Useful for table-wide null/zero substitutions and other
 -- whole-table treatments. Here a single FORMAT * replaces every
--- missing cell with an em-dash, regardless of column type.
+-- missing cell with `---`, which gt's smart-text processor renders
+-- as an em-dash (—). `--` likewise becomes an en-dash and `...`
+-- becomes a horizontal ellipsis (see example 25 for the substitution
+-- rules in detail).
 SELECT * FROM (VALUES
   ('Alpha', 100, 'on track'),
   ('Bravo', NULL::int, 'paused'),
@@ -10,4 +13,4 @@ SELECT * FROM (VALUES
 ) AS rows(name, units, status)
 TABULATE name, units, status
 FORMAT *
-  RENAMING null => '—'
+  RENAMING null => '---'
