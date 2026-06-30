@@ -89,6 +89,33 @@ sys.stdout.write(html.escape(open(sys.argv[1]).read()))
   } >>"$INDEX"
 done
 
+# -----------------------------------------------------------------------------
+# Quarto render (optional). Requires `quarto` on PATH and the ggsql-wasm bundle
+# built. The rendered HTML loads the bundle from ./wasm/ next to itself, so it
+# can be opened with `file://` or served from any static host.
+# -----------------------------------------------------------------------------
+
+WASM_DIST="$REPO_ROOT/ggsql-wasm/demo/dist"
+QUARTO_OUT_DIR="$OUT_DIR/quarto"
+
+if command -v quarto >/dev/null 2>&1; then
+  if [[ -f "$WASM_DIST/quarto.js" && -f "$WASM_DIST/ggsql_wasm_bg.wasm" ]]; then
+    echo "rendering tabulate.qmd through quarto ..."
+    mkdir -p "$QUARTO_OUT_DIR/wasm"
+    cp "$WASM_DIST/quarto.js" "$WASM_DIST/quarto.css" \
+       "$WASM_DIST/ggsql_wasm_bg.wasm" "$WASM_DIST/onig.wasm" \
+       "$QUARTO_OUT_DIR/wasm/"
+    quarto render "$EXAMPLES_DIR/tabulate.qmd" \
+      --output-dir "$QUARTO_OUT_DIR" --to html
+    echo "      and: $QUARTO_OUT_DIR/tabulate.html (live, browser-rendered)"
+  else
+    echo "[skip] quarto render — ggsql-wasm bundle missing."
+    echo "       run: cd ggsql-wasm && ./build-wasm.sh --skip-opt"
+  fi
+else
+  echo "[skip] quarto render — install quarto from https://quarto.org/"
+fi
+
 echo
 echo "done. open: $INDEX"
 echo "      and: $EXAMPLES_DIR/tabulate.qmd"

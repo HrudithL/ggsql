@@ -18,23 +18,39 @@ OUTPUT = Path(__file__).with_name("tabulate.qmd")
 FRONT_MATTER = """---
 title: "TABULATE examples"
 subtitle: "Every scenario from `examples/tabulate/` running live in your browser."
+jupyter: ggsql
+execute:
+  enabled: true
+  cache: false
 format:
   html:
     toc: true
     toc-depth: 2
     page-layout: full
+    include-after-body:
+      - text: |
+          <script type="module">
+            const base = './wasm/';
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = base + 'quarto.css';
+            document.head.appendChild(link);
+            import(base + 'quarto.js');
+          </script>
 ---
 
-This page is a showcase of the `ggsql-wasm` + Quarto integration: every
-`{ggsql}` fenced block below is executed by the bundled WebAssembly engine
-when the page loads, and the rendered TABULATE HTML is inlined under the
-block. The same scenarios run unchanged through the CLI
-(`examples/cli/`), the Jupyter kernel (`examples/jupyter/`), and the VS
-Code / Positron extension (`examples/vscode/`).
+This page is rendered by Quarto using the `ggsql` Jupyter kernel: every
+`{ggsql}` fenced block below is executed at build time and the rendered
+TABULATE HTML is inlined under the block. The accompanying `ggsql-wasm`
+bundle (loaded via the script tag injected from the YAML header above)
+then attaches a Monaco editor to each block so you can edit the query
+in the browser and re-execute it client-side via WebAssembly.
 
-The interactive playground curates a shorter set of these scenarios in a
-sidebar — see the **Tables** section of [the ggsql playground][playground]
-or `ggsql-wasm/demo/src/examples.ts` in the repo.
+The same scenarios run unchanged through the CLI (`examples/cli/`), the
+Jupyter notebook (`examples/jupyter/`), and the VS Code / Positron
+extension (`examples/vscode/`). The interactive playground also curates a
+shorter set in its sidebar — see the **Tables** section of
+[the ggsql playground][playground] or `ggsql-wasm/demo/src/examples.ts`.
 
 [playground]: https://ggsql.org/playground
 """
@@ -78,6 +94,9 @@ def main() -> int:
             parts.append(prose)
         parts.append("")
         parts.append("```{ggsql}")
+        # Negative-test scenarios should not abort the render.
+        if slug.endswith("_error"):
+            parts.append("#| error: true")
         parts.append(body)
         parts.append("```")
 
