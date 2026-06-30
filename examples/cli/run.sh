@@ -4,8 +4,8 @@
 # example with its source query and rendered table.
 #
 # Usage:
-#   examples/tabulate/run.sh            # build (if needed) then render all
-#   examples/tabulate/run.sh --release  # use the release binary instead
+#   examples/cli/run.sh            # build (if needed) then render all
+#   examples/cli/run.sh --release  # use the release binary instead
 
 set -euo pipefail
 

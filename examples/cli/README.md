@@ -1,7 +1,12 @@
-# TABULATE examples
+# TABULATE examples — CLI
 
-Runnable `.ggsql` examples that exercise the TABULATE surface implemented
-so far — phase 1 (column selection / reordering / hide / `*`), phase 2
+Runnable `.ggsql` examples that exercise the TABULATE surface through the
+`ggsql` command-line binary. For the same scenarios in the other surfaces
+see [`../jupyter/`](../jupyter/), [`../wasm/`](../wasm/), and
+[`../vscode/`](../vscode/).
+
+Implemented so far — phase 1 (column selection / reordering / hide / `*`),
+phase 2
 (`FORMAT STUB`, `LABEL title/subtitle/caption`, per-column header relabels,
 and basic `{:num ...}` formatters), phase 3 (`FORMAT SPAN <cols> AS
 <id>` with nesting + `LABEL` through the spanner namespace), phase 4
@@ -26,29 +31,29 @@ exercises SQL CTE → header → spanner → per-column formats →
 ## Run all examples
 
 ```sh
-./examples/tabulate/run.sh           # uses target/debug/ggsql
-./examples/tabulate/run.sh --release # uses target/release/ggsql
+./examples/cli/run.sh           # uses target/debug/ggsql
+./examples/cli/run.sh --release # uses target/release/ggsql
 ```
 
-The script writes one HTML file per query to `examples/tabulate/out/` and
+The script writes one HTML file per query to `examples/cli/out/` and
 produces `out/index.html` that lists every example with its source query
 and rendered table side-by-side. Open it in a browser:
 
 ```sh
-"$BROWSER" examples/tabulate/out/index.html
+"$BROWSER" examples/cli/out/index.html
 ```
 
 ## Run one example
 
 ```sh
-./target/debug/ggsql run examples/tabulate/01_minimal.ggsql
+./target/debug/ggsql run examples/cli/01_minimal.ggsql
 ```
 
 Add `--output path.html` to write to a file instead of stdout, or pipe to
 a browser:
 
 ```sh
-./target/debug/ggsql run examples/tabulate/01_minimal.ggsql > /tmp/t.html
+./target/debug/ggsql run examples/cli/01_minimal.ggsql > /tmp/t.html
 "$BROWSER" /tmp/t.html
 ```
 
