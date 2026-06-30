@@ -1,0 +1,27 @@
+{
+  "folders": [
+    {
+      "name": "TABULATE examples",
+      "path": "."
+    },
+    {
+      "name": "ggsql repo",
+      "path": "../.."
+    }
+  ],
+  "settings": {
+    "files.associations": {
+      "*.ggsql": "ggsql",
+      "*.gsql": "ggsql"
+    },
+    "[ggsql]": {
+      "editor.formatOnSave": false,
+      "editor.wordWrap": "on"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "posit.ggsql-vscode"
+    ]
+  }
+}
