@@ -32,7 +32,13 @@ if [ "$SKIP_BINARY" = false ]; then
     check_wasm32_support
 
     echo "Building WASM binary..."
-    (cd "$SCRIPT_DIR" && wasm-pack build --target web --profile wasm --no-opt)
+    # wasm-pack 0.13.x doesn't expose the custom `wasm` cargo profile as a
+    # native flag. Forward it through after `--` so wasm-pack only parses its
+    # own options (e.g. --no-opt). Use `--dev` to suppress wasm-pack's
+    # automatic `--release`, which would otherwise conflict with our explicit
+    # `--profile wasm`; the cargo profile selection still wins, so the output
+    # is built with the `wasm` profile (release-derived, opt-level=z).
+    (cd "$SCRIPT_DIR" && wasm-pack build --target web --dev --no-opt -- --profile wasm)
 
     if [ "$SKIP_OPT" = false ]; then
         echo "Optimising WASM binary..."
