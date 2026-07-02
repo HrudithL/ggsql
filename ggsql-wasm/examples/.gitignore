@@ -1,5 +1,6 @@
 out/*.html
 !out/preview.html
+out/quarto/
 __pycache__/
 
 /.quarto/

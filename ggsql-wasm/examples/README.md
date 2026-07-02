@@ -12,8 +12,8 @@ crate.
 |---|---|
 | `NN_<slug>.ggsql` (53 files) | Individual runnable TABULATE scenarios. Each has a leading `--` comment describing what it demonstrates. Read directly by `build_qmd.py` and `run.sh`. |
 | [`tabulate.qmd`](tabulate.qmd) | Quarto source with one `{ggsql}` cell per scenario. Render with the `ggsql-wasm`-aware Quarto setup and every cell executes live in the browser. |
-| [`out/preview.html`](out/preview.html) | Static preview produced by the CLI binary (which uses the same `tabulate::html::render` as the WASM engine). Use this as a reviewer-friendly reference when you can't render the `.qmd`. |
-| [`out/quarto/`](out/quarto/) | Full Quarto render of `tabulate.qmd`. Open `out/quarto/tabulate.html` to see the live in-browser version (needs the wasm bundle to also be present). |
+| [`out/preview.html`](out/preview.html) | Static preview produced by the CLI binary (which uses the same `tabulate::html::render` as the WASM engine). Committed, so reviewers can view every scenario without running anything locally. The gt-random ids are normalized by `run.sh` so this file is byte-stable across re-runs. |
+| `out/quarto/` | Full Quarto render of `tabulate.qmd`. **Not committed** (Quarto asset hashes and internal JS drift with Quarto's version, which would produce noisy diffs on every render). Produced by `run.sh` when both `quarto` and the wasm bundle are available; open `out/quarto/tabulate.html` locally to see the live in-browser version. |
 | [`build_qmd.py`](build_qmd.py) | Regenerates `tabulate.qmd` from the sibling `NN_<slug>.ggsql` files. |
 | [`run.sh`](run.sh) | Orchestrates: regenerate `.qmd`, build `preview.html`, and (optionally) run `quarto render`. |
 
@@ -88,8 +88,10 @@ canonical full set.
     ```
     The `.qmd`, the static preview, and (if `quarto` is available) the
     Quarto render all refresh from disk. No manual edits required.
-3.  Commit the new `NN_<slug>.ggsql`, `tabulate.qmd`, and `out/*`
-    together.
+3.  Commit the new `NN_<slug>.ggsql`, the regenerated `tabulate.qmd`,
+    and the regenerated `out/preview.html`. Do **not** commit
+    `out/quarto/` — it is gitignored because Quarto's asset hashes and
+    internal JS drift from version to version.
 
 Files whose name ends in `_error` are negative tests — `run.sh` captures
 stderr and inlines the diagnostic in the preview rather than aborting.

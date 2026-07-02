@@ -89,6 +89,23 @@ sys.stdout.write(html.escape(open(sys.argv[1]).read()))
   } >>"$INDEX"
 done
 
+# gt emits a random 10-hex `id="..."` on each table wrapper div. Normalize
+# to a stable sequential id-0001, id-0002, ... so re-runs of this script
+# produce a byte-identical preview.html and reviewers get a clean git tree.
+python3 - <<'PY' "$INDEX"
+import re, sys
+path = sys.argv[1]
+html = open(path).read()
+seen = {}
+def repl(m):
+    tok = m.group(1)
+    if tok not in seen:
+        seen[tok] = f"id-{len(seen) + 1:04d}"
+    return m.group(0).replace(tok, seen[tok])
+html = re.sub(r'id="([0-9a-f]{10})"', repl, html)
+open(path, "w").write(html)
+PY
+
 # -----------------------------------------------------------------------------
 # Quarto render (optional). Requires `quarto` on PATH and the ggsql-wasm bundle
 # built. The rendered HTML loads the bundle from ./wasm/ next to itself, so it
