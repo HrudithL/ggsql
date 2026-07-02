@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Run every .ggsql file in this folder through the ggsql CLI and write the
+# Run every scenarios/*.ggsql file through the ggsql CLI and write the
 # rendered HTML to ./out/. Also produces ./out/index.html listing every
 # example with its source query and rendered table.
 #
 # Usage:
-#   examples/cli/run.sh            # build (if needed) then render all
-#   examples/cli/run.sh --release  # use the release binary instead
+#   ggsql-cli/examples/run.sh            # build (if needed) then render all
+#   ggsql-cli/examples/run.sh --release  # use the release binary instead
 
 set -euo pipefail
 
 cd "$(dirname "$0")"
 EXAMPLES_DIR="$PWD"
+SCENARIOS_DIR="$EXAMPLES_DIR/scenarios"
 REPO_ROOT="$(cd ../.. && pwd)"
 OUT_DIR="$EXAMPLES_DIR/out"
 
@@ -59,10 +60,10 @@ cat >"$INDEX" <<'HEAD'
 HEAD
 
 shopt -s nullglob
-for query in "$EXAMPLES_DIR"/*.ggsql; do
+for query in "$SCENARIOS_DIR"/*.ggsql; do
   name=$(basename "$query" .ggsql)
   html_path="$OUT_DIR/$name.html"
-  echo "  $name.ggsql -> out/$name.html"
+  echo "  scenarios/$name.ggsql -> out/$name.html"
 
   # Examples whose name ends in `_error` are negative tests: they should
   # produce a parse-/execute-time error. Capture stderr so the diagnostic
