@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Build ggsql-wasm/examples/tabulate.qmd from the sibling NN_slug.ggsql files.
+"""Build ggsql-wasm/examples/tabulate.qmd from scenarios/NN_slug.ggsql.
 
-Each .ggsql file becomes a level-2 heading + a `{ggsql}` fenced code block
-that the wasm-aware Quarto extension picks up and executes in-browser.
+Each .ggsql file under `scenarios/` becomes a level-2 heading + a
+`{ggsql}` fenced code block that the wasm-aware Quarto extension picks
+up and executes in-browser.
 
 Run from any working directory:
     python3 ggsql-wasm/examples/build_qmd.py
@@ -15,6 +16,7 @@ import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+SCENARIOS_DIR = SCRIPT_DIR / "scenarios"
 OUTPUT = SCRIPT_DIR / "tabulate.qmd"
 SCENARIO_RE = re.compile(r"^\d+_.+\.ggsql$")
 
@@ -77,9 +79,9 @@ def split_header(text: str) -> tuple[str, str]:
 
 
 def main() -> int:
-    files = sorted(p for p in SCRIPT_DIR.glob("*.ggsql") if SCENARIO_RE.match(p.name))
+    files = sorted(p for p in SCENARIOS_DIR.glob("*.ggsql") if SCENARIO_RE.match(p.name))
     if not files:
-        print(f"no NN_*.ggsql scenario files in {SCRIPT_DIR}", file=sys.stderr)
+        print(f"no NN_*.ggsql scenario files in {SCENARIOS_DIR}", file=sys.stderr)
         return 1
 
     parts: list[str] = [FRONT_MATTER]

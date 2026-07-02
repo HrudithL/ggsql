@@ -13,7 +13,7 @@ cd "$(dirname "$0")"
 EXAMPLES_DIR="$PWD"
 REPO_ROOT="$(cd ../.. && pwd)"
 OUT_DIR="$EXAMPLES_DIR/out"
-SOURCE_DIR="$EXAMPLES_DIR"
+SOURCE_DIR="$EXAMPLES_DIR/scenarios"
 
 PROFILE_DIR="debug"
 CARGO_FLAGS=()

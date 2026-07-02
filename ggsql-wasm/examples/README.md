@@ -1,20 +1,22 @@
 # `ggsql-wasm` examples
 
-This folder is fully self-contained: the 53 TABULATE `.ggsql` scenarios
-live here directly, and everything you need to render them for the
+This folder is self-contained: the 53 TABULATE `.ggsql` scenarios live
+under `scenarios/`, and everything you need to render them for the
 `ggsql-wasm` browser engine and the Quarto integration that ships in
 [`../demo/`](../demo/) is in this folder or the sibling `ggsql-wasm/`
-crate.
+crate. The main artifact — the browser-executable Quarto document —
+is [`tabulate.qmd`](tabulate.qmd); the static reviewer-facing render is
+[`out/preview.html`](out/preview.html).
 
 ## Folder layout
 
 | Path | What it is |
 |---|---|
-| `NN_<slug>.ggsql` (53 files) | Individual runnable TABULATE scenarios. Each has a leading `--` comment describing what it demonstrates. Read directly by `build_qmd.py` and `run.sh`. |
-| [`tabulate.qmd`](tabulate.qmd) | Quarto source with one `{ggsql}` cell per scenario. Render with the `ggsql-wasm`-aware Quarto setup and every cell executes live in the browser. |
+| [`tabulate.qmd`](tabulate.qmd) | **Main artifact.** Quarto source with one `{ggsql}` cell per scenario. Render with the `ggsql-wasm`-aware Quarto setup and every cell executes live in the browser. |
+| [`scenarios/`](scenarios/) | Individual `NN_<slug>.ggsql` files (53 total), one per scenario. Read by `build_qmd.py` and `run.sh`. Kept out of the top-level listing to reduce clutter. |
 | [`out/preview.html`](out/preview.html) | Static preview produced by the CLI binary (which uses the same `tabulate::html::render` as the WASM engine). Committed, so reviewers can view every scenario without running anything locally. The gt-random ids are normalized by `run.sh` so this file is byte-stable across re-runs. |
 | `out/quarto/` | Full Quarto render of `tabulate.qmd`. **Not committed** (Quarto asset hashes and internal JS drift with Quarto's version, which would produce noisy diffs on every render). Produced by `run.sh` when both `quarto` and the wasm bundle are available; open `out/quarto/tabulate.html` locally to see the live in-browser version. |
-| [`build_qmd.py`](build_qmd.py) | Regenerates `tabulate.qmd` from the sibling `NN_<slug>.ggsql` files. |
+| [`build_qmd.py`](build_qmd.py) | Regenerates `tabulate.qmd` from `scenarios/NN_<slug>.ggsql`. |
 | [`run.sh`](run.sh) | Orchestrates: regenerate `.qmd`, build `preview.html`, and (optionally) run `quarto render`. |
 
 ## Prerequisites
@@ -44,7 +46,7 @@ From the repo root:
 
 `run.sh` does three things:
 
-1.  Regenerates `tabulate.qmd` from the sibling `NN_<slug>.ggsql`
+1.  Regenerates `tabulate.qmd` from the `scenarios/NN_<slug>.ggsql`
     files via `build_qmd.py`.
 2.  Rebuilds the static `out/preview.html` by running every scenario
     through the CLI.
@@ -80,18 +82,18 @@ canonical full set.
 
 ## Add a new scenario
 
-1.  Add `ggsql-wasm/examples/<NN>_<slug>.ggsql` (use the next available
-    number and a snake_case slug).
+1.  Add `ggsql-wasm/examples/scenarios/<NN>_<slug>.ggsql` (use the next
+    available number and a snake_case slug).
 2.  From any working directory, re-run:
     ```sh
     ./ggsql-wasm/examples/run.sh
     ```
     The `.qmd`, the static preview, and (if `quarto` is available) the
     Quarto render all refresh from disk. No manual edits required.
-3.  Commit the new `NN_<slug>.ggsql`, the regenerated `tabulate.qmd`,
-    and the regenerated `out/preview.html`. Do **not** commit
-    `out/quarto/` — it is gitignored because Quarto's asset hashes and
-    internal JS drift from version to version.
+3.  Commit the new `scenarios/<NN>_<slug>.ggsql`, the regenerated
+    `tabulate.qmd`, and the regenerated `out/preview.html`. Do **not**
+    commit `out/quarto/` — it is gitignored because Quarto's asset
+    hashes and internal JS drift from version to version.
 
 Files whose name ends in `_error` are negative tests — `run.sh` captures
 stderr and inlines the diagnostic in the preview rather than aborting.
