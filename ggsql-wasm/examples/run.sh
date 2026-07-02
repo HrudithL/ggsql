@@ -13,7 +13,7 @@ cd "$(dirname "$0")"
 EXAMPLES_DIR="$PWD"
 REPO_ROOT="$(cd ../.. && pwd)"
 OUT_DIR="$EXAMPLES_DIR/out"
-SOURCE_DIR="$REPO_ROOT/examples/tabulate"
+SOURCE_DIR="$EXAMPLES_DIR"
 
 PROFILE_DIR="debug"
 CARGO_FLAGS=()
@@ -28,7 +28,7 @@ if [[ ! -x "$BIN" ]]; then
 fi
 
 echo "regenerating tabulate.qmd ..."
-python "$EXAMPLES_DIR/build_qmd.py"
+python3 "$EXAMPLES_DIR/build_qmd.py"
 
 mkdir -p "$OUT_DIR"
 INDEX="$OUT_DIR/preview.html"

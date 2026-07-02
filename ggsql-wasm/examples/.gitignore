@@ -3,3 +3,5 @@ out/*.html
 __pycache__/
 
 /.quarto/
+
+**/*.quarto_ipynb

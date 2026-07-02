@@ -1,9 +1,0 @@
-SELECT
-  'Acme'        AS company,  120000 AS revenue, 0.18 AS growth UNION ALL SELECT
-  'Globex',              98000,                          0.06              UNION ALL SELECT
-  'Initech',             54000,                         -0.04              UNION ALL SELECT
-  'Umbrella',           10000,                          0.31              UNION ALL SELECT
-  'Stark Industries',   480000,                          0.12
-TABULATE company, revenue, growth
-FORMAT growth
-  SETTING hide => false

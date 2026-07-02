@@ -1,6 +1,6 @@
 ---
 title: "TABULATE examples"
-subtitle: "Every scenario from `examples/tabulate/` running live in your browser."
+subtitle: "Every NN_slug.ggsql scenario in this folder running live in your browser."
 jupyter: ggsql
 execute:
   enabled: true

@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
-"""Build ggsql-wasm/examples/tabulate.qmd from examples/tabulate/*.ggsql.
+"""Build ggsql-wasm/examples/tabulate.qmd from the sibling NN_slug.ggsql files.
 
 Each .ggsql file becomes a level-2 heading + a `{ggsql}` fenced code block
-that the wasm-aware Quarto extension picks up and executes in-browser. Run
-this from the repo root after adding or editing scenarios in
-examples/tabulate/."""
+that the wasm-aware Quarto extension picks up and executes in-browser.
+
+Run from any working directory:
+    python3 ggsql-wasm/examples/build_qmd.py
+"""
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SOURCE_DIR = REPO_ROOT / "examples" / "tabulate"
-OUTPUT = Path(__file__).with_name("tabulate.qmd")
+SCRIPT_DIR = Path(__file__).resolve().parent
+OUTPUT = SCRIPT_DIR / "tabulate.qmd"
+SCENARIO_RE = re.compile(r"^\d+_.+\.ggsql$")
 
 FRONT_MATTER = """---
 title: "TABULATE examples"
-subtitle: "Every scenario from `examples/tabulate/` running live in your browser."
+subtitle: "Every NN_slug.ggsql scenario in this folder running live in your browser."
 jupyter: ggsql
 execute:
   enabled: true
@@ -74,9 +77,9 @@ def split_header(text: str) -> tuple[str, str]:
 
 
 def main() -> int:
-    files = sorted(SOURCE_DIR.glob("*.ggsql"))
+    files = sorted(p for p in SCRIPT_DIR.glob("*.ggsql") if SCENARIO_RE.match(p.name))
     if not files:
-        print(f"no .ggsql files in {SOURCE_DIR}", file=sys.stderr)
+        print(f"no NN_*.ggsql scenario files in {SCRIPT_DIR}", file=sys.stderr)
         return 1
 
     parts: list[str] = [FRONT_MATTER]
