@@ -42,7 +42,12 @@ use crate::{Plot, Result};
 
 pub mod builder;
 pub mod source_tree;
-pub mod tabulate;
+
+// TABULATE lowering (tree-sitter -> TabulateStmt) is deferred alongside the
+// executor. The grammar still recognises `tabulate_statement`; `build_ast`
+// intercepts it and returns a "coming soon" error instead of building an AST.
+//
+// pub mod tabulate;
 
 pub use builder::build_ast;
 pub use source_tree::SourceTree;

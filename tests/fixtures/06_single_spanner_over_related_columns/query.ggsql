@@ -1,6 +1,0 @@
-SELECT year, model, bdy_style, hp, hp_rpm, trq, trq_rpm, mpg_c, mpg_h
-FROM gtcars LIMIT 8
-
-TABULATE year, model, bdy_style, hp, hp_rpm, trq, trq_rpm, mpg_c, mpg_h
-FORMAT STUB model
-FORMAT SPAN hp, hp_rpm, trq, trq_rpm, mpg_c, mpg_h AS performance

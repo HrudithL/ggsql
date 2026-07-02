@@ -72,7 +72,10 @@ impl RenderHints {
 pub fn format_display_data(result: ExecutionResult, hints: &RenderHints) -> Option<Value> {
     match result {
         ExecutionResult::Visualization { spec } => Some(format_vegalite(spec, hints)),
-        ExecutionResult::Table { html, rows, cols } => Some(format_table(html, rows, cols)),
+        // TABULATE display arm, restored once the executor + `Table` variant
+        // land upstream:
+        //
+        // ExecutionResult::Table { html, rows, cols } => Some(format_table(html, rows, cols)),
         ExecutionResult::DataFrame(df) => {
             // DDL statements return DataFrames with 0 columns - don't display anything
             if df.width() == 0 {
@@ -113,43 +116,38 @@ fn format_vegalite(spec: String, hints: &RenderHints) -> Value {
     })
 }
 
-/// Format a TABULATE table as display_data.
-///
-/// The rendered HTML from `ggsql::tabulate::html::render` is already a
-/// self-contained document (inlined `<style>`, no external JS). We wrap
-/// it in an `overflow:auto` container so wide tables scroll within the
-/// notebook output area instead of overflowing the layout, then emit it
-/// verbatim.
-///
-/// Crucially: no `output_location` field is emitted — TABULATE output is
-/// a table view, not a plot, and must render inline beneath the cell
-/// rather than route to Positron's Plots pane.
-fn format_table(html: String, rows: usize, cols: usize) -> Value {
-    let plural = |n: usize, s: &str| -> String {
-        if n == 1 {
-            format!("{} {}", n, s)
-        } else {
-            format!("{} {}s", n, s)
-        }
-    };
-    let summary = format!(
-        "<TABULATE table: {} \u{00D7} {}>",
-        plural(rows, "row"),
-        plural(cols, "column")
-    );
-    let wrapped = format!(
-        "<div class=\"ggsql-tabulate-output\" style=\"overflow:auto;\">{}</div>",
-        html
-    );
-    json!({
-        "data": {
-            "text/html": wrapped,
-            "text/plain": summary
-        },
-        "metadata": {},
-        "transient": {}
-    })
-}
+// TABULATE display formatter, restored once the executor + `Table` variant
+// land upstream. The renderer already emits self-contained HTML (inlined
+// `<style>`, no external JS); this helper wraps it in an overflow container
+// and packages it as a Jupyter display_data payload without an
+// `output_location` field (so it renders inline, not in the Plots pane).
+//
+// fn format_table(html: String, rows: usize, cols: usize) -> Value {
+//     let plural = |n: usize, s: &str| -> String {
+//         if n == 1 {
+//             format!("{} {}", n, s)
+//         } else {
+//             format!("{} {}s", n, s)
+//         }
+//     };
+//     let summary = format!(
+//         "<TABULATE table: {} \u{00D7} {}>",
+//         plural(rows, "row"),
+//         plural(cols, "column")
+//     );
+//     let wrapped = format!(
+//         "<div class=\"ggsql-tabulate-output\" style=\"overflow:auto;\">{}</div>",
+//         html
+//     );
+//     json!({
+//         "data": {
+//             "text/html": wrapped,
+//             "text/plain": summary
+//         },
+//         "metadata": {},
+//         "transient": {}
+//     })
+// }
 
 /// Generate the HTML wrapper that embeds a Vega-Lite spec via vega-embed.
 pub fn vegalite_html(spec: &str, hints: &RenderHints) -> String {
@@ -426,74 +424,75 @@ mod tests {
         assert!(display["data"]["text/plain"].is_string());
     }
 
-    fn fake_table_html() -> String {
-        // Minimal fragment with the marker class the renderer always emits.
-        r#"<style>.gt_table{}</style><table class="gt_table"><tr><td>1</td></tr></table>"#
-            .to_string()
-    }
-
-    #[test]
-    fn test_format_table_returns_html_inline() {
-        let result = ExecutionResult::Table {
-            html: fake_table_html(),
-            rows: 1,
-            cols: 1,
-        };
-        let display = format_display_data(result, &RenderHints::default())
-            .expect("Table result must produce display data");
-
-        let html = display["data"]["text/html"].as_str().unwrap();
-        assert!(
-            html.contains("gt_table"),
-            "TABULATE HTML must carry the gt_table marker class"
-        );
-        assert!(
-            display.get("output_location").is_none(),
-            "TABULATE output must render inline, not in the Plots pane"
-        );
-    }
-
-    #[test]
-    fn test_format_table_does_not_load_vega() {
-        // The TABULATE HTML must not pull in any vega/vega-embed/requirejs
-        // payload — a stray reference would cause the host frontend to try
-        // running the plot bootstrap against a static table.
-        let result = ExecutionResult::Table {
-            html: fake_table_html(),
-            rows: 0,
-            cols: 1,
-        };
-        let display = format_display_data(result, &RenderHints::default())
-            .expect("Table result must produce display data");
-
-        let html = display["data"]["text/html"].as_str().unwrap();
-        for forbidden in [
-            "vega-embed",
-            "vegaEmbed",
-            "requirejs",
-            "cdn.jsdelivr.net",
-            "vega-lite",
-        ] {
-            assert!(
-                !html.contains(forbidden),
-                "TABULATE HTML must not contain {:?}",
-                forbidden
-            );
-        }
-    }
-
-    #[test]
-    fn test_format_table_text_plain_summary() {
-        let result = ExecutionResult::Table {
-            html: fake_table_html(),
-            rows: 5,
-            cols: 3,
-        };
-        let display = format_display_data(result, &RenderHints::default()).unwrap();
-        let plain = display["data"]["text/plain"].as_str().unwrap();
-        assert!(plain.contains("5 rows"));
-        assert!(plain.contains("3 columns"));
-    }
+    // Original TABULATE display tests, kept for reference. Restore once the
+    // executor + `ExecutionResult::Table` variant + `format_table` land
+    // upstream.
+    //
+    // fn fake_table_html() -> String {
+    //     // Minimal fragment with the marker class the renderer always emits.
+    //     r#"<style>.gt_table{}</style><table class="gt_table"><tr><td>1</td></tr></table>"#
+    //         .to_string()
+    // }
+    //
+    // #[test]
+    // fn test_format_table_returns_html_inline() {
+    //     let result = ExecutionResult::Table {
+    //         html: fake_table_html(),
+    //         rows: 1,
+    //         cols: 1,
+    //     };
+    //     let display = format_display_data(result, &RenderHints::default())
+    //         .expect("Table result must produce display data");
+    //
+    //     let html = display["data"]["text/html"].as_str().unwrap();
+    //     assert!(
+    //         html.contains("gt_table"),
+    //         "TABULATE HTML must carry the gt_table marker class"
+    //     );
+    //     assert!(
+    //         display.get("output_location").is_none(),
+    //         "TABULATE output must render inline, not in the Plots pane"
+    //     );
+    // }
+    //
+    // #[test]
+    // fn test_format_table_does_not_load_vega() {
+    //     let result = ExecutionResult::Table {
+    //         html: fake_table_html(),
+    //         rows: 0,
+    //         cols: 1,
+    //     };
+    //     let display = format_display_data(result, &RenderHints::default())
+    //         .expect("Table result must produce display data");
+    //
+    //     let html = display["data"]["text/html"].as_str().unwrap();
+    //     for forbidden in [
+    //         "vega-embed",
+    //         "vegaEmbed",
+    //         "requirejs",
+    //         "cdn.jsdelivr.net",
+    //         "vega-lite",
+    //     ] {
+    //         assert!(
+    //             !html.contains(forbidden),
+    //             "TABULATE HTML must not contain {:?}",
+    //             forbidden
+    //         );
+    //     }
+    // }
+    //
+    // #[test]
+    // fn test_format_table_text_plain_summary() {
+    //     let result = ExecutionResult::Table {
+    //         html: fake_table_html(),
+    //         rows: 5,
+    //         cols: 3,
+    //     };
+    //     let display = format_display_data(result, &RenderHints::default()).unwrap();
+    //     let plain = display["data"]["text/plain"].as_str().unwrap();
+    //     assert!(plain.contains("5 rows"));
+    //     assert!(plain.contains("3 columns"));
+    // }
 
     #[test]
     fn test_empty_dataframe_returns_none() {

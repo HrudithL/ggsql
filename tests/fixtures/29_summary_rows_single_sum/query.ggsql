@@ -1,4 +1,0 @@
-TABULATE product, revenue, units FROM quarterly_sales
-FACET category
-  SETTING target => (revenue, units),
-          aggregate => ('sum')

@@ -24,12 +24,14 @@ pub enum ExecutionResult {
     Visualization {
         spec: String, // Vega-Lite JSON
     },
-    /// TABULATE query: pre-rendered, self-contained HTML table.
-    Table {
-        html: String,
-        rows: usize,
-        cols: usize,
-    },
+    // TABULATE result variant, restored once the executor lands upstream:
+    //
+    // /// TABULATE query: pre-rendered, self-contained HTML table.
+    // Table {
+    //     html: String,
+    //     rows: usize,
+    //     cols: usize,
+    // },
     /// Connection changed via meta-command
     ConnectionChanged { uri: String, display_name: String },
 }
@@ -216,17 +218,29 @@ impl QueryExecutor {
         // 1. Validate to check if there's a visualization or a TABULATE clause
         let validated = validate(code)?;
 
-        // 2. TABULATE takes priority over the pure-SQL branch and is
-        //    mutually exclusive with VISUALISE (the parser/spec forbid
-        //    mixing the two, but we order this branch first so that any
-        //    future loosening still routes correctly).
+        // 2. TABULATE is parsed by the grammar but not yet implemented.
+        //    Reject with a clear "coming soon" error so callers surface a
+        //    useful message instead of failing later inside the SQL layer.
+        //
+        //    When the executor lands, restore the original dispatch preserved
+        //    here for reference:
+        //
+        //    if validated.has_tabulate() && !validated.has_visual() {
+        //        let ir = ggsql::tabulate::execute::execute_with_reader(
+        //            self.reader.as_ref(),
+        //            code,
+        //        )?;
+        //        let rows = ir.rows.len();
+        //        let cols = ir.columns.len();
+        //        let html = ggsql::tabulate::html::render(&ir);
+        //        tracing::info!("TABULATE executed: {} rows, {} cols", rows, cols);
+        //        return Ok(ExecutionResult::Table { html, rows, cols });
+        //    }
         if validated.has_tabulate() && !validated.has_visual() {
-            let ir = ggsql::tabulate::execute::execute_with_reader(self.reader.as_ref(), code)?;
-            let rows = ir.rows.len();
-            let cols = ir.columns.len();
-            let html = ggsql::tabulate::html::render(&ir);
-            tracing::info!("TABULATE executed: {} rows, {} cols", rows, cols);
-            return Ok(ExecutionResult::Table { html, rows, cols });
+            anyhow::bail!(
+                "TABULATE support is not yet implemented; tables are coming \
+                 in a future release."
+            );
         }
 
         // 3. Pure SQL query - execute directly and return DataFrame
@@ -272,30 +286,42 @@ mod tests {
         assert!(matches!(result, ExecutionResult::Visualization { .. }));
     }
 
+    // Original TABULATE happy-path test, kept for reference. Restore once the
+    // executor lands and `ExecutionResult::Table` returns.
+    //
+    // #[test]
+    // fn test_tabulate() {
+    //     let mut executor = QueryExecutor::new().unwrap();
+    //     let code = "SELECT 1 AS x, 2 AS y TABULATE x, y";
+    //     let result = executor.execute(code).unwrap();
+    //
+    //     match result {
+    //         ExecutionResult::Table { html, rows, cols } => {
+    //             assert_eq!(rows, 1);
+    //             assert_eq!(cols, 2);
+    //             assert!(
+    //                 html.contains("gt_table"),
+    //                 "rendered HTML must carry the gt_table class"
+    //             );
+    //         }
+    //         other => panic!("expected ExecutionResult::Table, got {:?}", other),
+    //     }
+    // }
     #[test]
-    fn test_tabulate() {
+    fn test_tabulate_not_yet_implemented() {
         let mut executor = QueryExecutor::new().unwrap();
         let code = "SELECT 1 AS x, 2 AS y TABULATE x, y";
-        let result = executor.execute(code).unwrap();
-
-        match result {
-            ExecutionResult::Table { html, rows, cols } => {
-                assert_eq!(rows, 1);
-                assert_eq!(cols, 2);
-                assert!(
-                    html.contains("gt_table"),
-                    "rendered HTML must carry the gt_table class"
-                );
-            }
-            other => panic!("expected ExecutionResult::Table, got {:?}", other),
-        }
+        let err = executor.execute(code).unwrap_err();
+        assert!(
+            err.to_string().contains("TABULATE support is not yet implemented"),
+            "expected coming-soon error, got: {err}"
+        );
     }
 
     #[test]
     fn test_visualize_wins_over_pure_sql() {
         // Defensive: when only VISUALISE is present, the executor takes the
-        // visualization branch (not the TABULATE branch, which requires the
-        // TABULATE clause to be present in validate()).
+        // visualization branch.
         let mut executor = QueryExecutor::new().unwrap();
         let code = "SELECT 1 AS x, 2 AS y VISUALISE x, y DRAW point";
         let result = executor.execute(code).unwrap();

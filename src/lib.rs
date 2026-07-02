@@ -53,7 +53,13 @@ pub mod execute;
 
 pub mod validate;
 
-pub mod tabulate;
+// TABULATE is parsed by the tree-sitter grammar but the executor / IR / HTML
+// writer live on the full-implementation branches. This crate ships only the
+// grammar plus a parser stub; wiring in the tabulate module would drag the
+// entire implementation along, so the module registration below is kept
+// commented out until the executor lands upstream.
+//
+// pub mod tabulate;
 
 // Re-export key types for convenience
 pub use plot::{

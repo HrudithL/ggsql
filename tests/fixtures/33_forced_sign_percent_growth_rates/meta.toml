@@ -1,6 +1,0 @@
-example_number = 33
-title = "Forced-sign percent (growth rates)"
-gt_version = "1.3.0"
-captured_at = "2026-06-04T00:32:07-0400"
-normalization_profile = "default"
-# allowed_diff = []  # add regex strings only with justification in AGENT_LOG.md

@@ -1,4 +1,0 @@
-TABULATE region, revenue, units, margin FROM sales
-HIGHLIGHT revenue, units, margin
-  FILTER region = 'West'
-  SETTING background => '#fff3cd'

@@ -1,3 +1,0 @@
-TABULATE num, char FROM exibble
-FORMAT num
-  RENAMING * => '{:num %.3f}'

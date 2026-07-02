@@ -1,7 +1,0 @@
-SELECT model, year, hp, msrp FROM gtcars LIMIT 8
-TABULATE model, year, hp, msrp
-FORMAT STUB model
-FORMAT hp
-  RENAMING * => '{:num %\'d}'
-FORMAT msrp
-  RENAMING * => '${:num %\'d}'

@@ -1,5 +1,0 @@
-SELECT mfr, model, msrp FROM gtcars LIMIT 5
-TABULATE mfr, model, msrp
-LABEL
-  title => 'Data listing from gtcars',
-  subtitle => 'gtcars is an R dataset'

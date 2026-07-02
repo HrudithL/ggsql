@@ -1,3 +1,0 @@
-TABULATE country, population, gdp_per_capita FROM world_data
-SCALE background FROM (0, 100000) TO ('white', 'darkgreen') VIA log10
-  SETTING target => (gdp_per_capita)

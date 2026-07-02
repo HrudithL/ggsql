@@ -6,7 +6,9 @@ Provides commands for executing ggsql queries with various data sources and outp
 
 use clap::{Parser, Subcommand, ValueEnum};
 use ggsql::reader::{Reader, Spec};
-use ggsql::tabulate;
+// TABULATE executor lives on a separate branch; this build only ships the
+// grammar + parser stub, so the `tabulate` module is not imported.
+// use ggsql::tabulate;
 use ggsql::validate::validate;
 use ggsql::{parser, VERSION};
 use std::io::IsTerminal;
@@ -282,12 +284,22 @@ fn exec_with_reader<R: Reader>(
         }
     };
 
+    // TABULATE is parsed but not yet implemented. When the executor lands,
+    // restore the original dispatch preserved here for reference:
+    //
+    // if validated.has_tabulate() && !validated.has_visual() {
+    //     if verbose {
+    //         eprintln!("Tabulating query.");
+    //     }
+    //     render_tabulate(query, reader, output, verbose);
+    //     return;
+    // }
     if validated.has_tabulate() && !validated.has_visual() {
-        if verbose {
-            eprintln!("Tabulating query.");
-        }
-        render_tabulate(query, reader, output, verbose);
-        return;
+        eprintln!(
+            "TABULATE support is not yet implemented; tables are coming \
+             in a future release."
+        );
+        std::process::exit(1);
     }
 
     if !validated.has_visual() {
@@ -310,40 +322,43 @@ fn exec_with_reader<R: Reader>(
     render_spec(spec, writer, output, verbose);
 }
 
-fn render_tabulate<R: Reader>(query: &str, reader: &R, output: Option<PathBuf>, verbose: bool) {
-    let table_ir = match tabulate::execute::execute_with_reader(reader, query) {
-        Ok(ir) => ir,
-        Err(e) => {
-            eprintln!("Failed to execute TABULATE query: {}", e);
-            std::process::exit(1);
-        }
-    };
-
-    if verbose {
-        eprintln!(
-            "\nTable: {} rows, {} columns",
-            table_ir.rows.len(),
-            table_ir.columns.len()
-        );
-    }
-
-    let html = tabulate::html::render(&table_ir);
-
-    match output {
-        None => println!("{}", html),
-        Some(path) => match std::fs::write(&path, html) {
-            Ok(_) => {
-                if verbose {
-                    eprintln!("\nHTML written to: {}", path.display());
-                }
-            }
-            Err(e) => {
-                eprintln!("Failed to write to output file: {}", e);
-                std::process::exit(1);
-            }
-        },
-    }
-}
+// TABULATE renderer, preserved for when the executor lands. Currently unused
+// because the dispatch above short-circuits with a "coming soon" error.
+//
+// fn render_tabulate<R: Reader>(query: &str, reader: &R, output: Option<PathBuf>, verbose: bool) {
+//     let table_ir = match tabulate::execute::execute_with_reader(reader, query) {
+//         Ok(ir) => ir,
+//         Err(e) => {
+//             eprintln!("Failed to execute TABULATE query: {}", e);
+//             std::process::exit(1);
+//         }
+//     };
+//
+//     if verbose {
+//         eprintln!(
+//             "\nTable: {} rows, {} columns",
+//             table_ir.rows.len(),
+//             table_ir.columns.len()
+//         );
+//     }
+//
+//     let html = tabulate::html::render(&table_ir);
+//
+//     match output {
+//         None => println!("{}", html),
+//         Some(path) => match std::fs::write(&path, html) {
+//             Ok(_) => {
+//                 if verbose {
+//                     eprintln!("\nHTML written to: {}", path.display());
+//                 }
+//             }
+//             Err(e) => {
+//                 eprintln!("Failed to write to output file: {}", e);
+//                 std::process::exit(1);
+//             }
+//         },
+//     }
+// }
 
 fn render_spec(spec: Spec, writer: &str, output: Option<PathBuf>, verbose: bool) {
     if verbose {

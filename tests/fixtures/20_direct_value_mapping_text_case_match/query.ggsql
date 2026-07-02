@@ -1,5 +1,0 @@
-TABULATE feature, available FROM features
-FORMAT available
-  RENAMING 'Y' => '✓ Yes',
-           'N' => '✗ No',
-           'P' => '◐ Partial'

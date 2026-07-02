@@ -1,8 +1,0 @@
-SELECT model, hp, msrp FROM gtcars LIMIT 5
-TABULATE model, hp, msrp
-FORMAT model
-  SETTING width => '180px'
-FORMAT hp
-  SETTING width => '80px', align => 'right'
-FORMAT msrp
-  SETTING width => '120px', align => 'right'

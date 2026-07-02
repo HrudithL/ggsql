@@ -209,13 +209,26 @@ pub fn build_ast(source: &SourceTree) -> Result<Vec<Plot>> {
     let query = "(visualise_statement) @viz";
     let viz_nodes = source.find_nodes(&root, query);
 
-    // VISUALISE and TABULATE are mutually exclusive in a single query.
-    // Reject any query containing both with a clear error.
+    // TABULATE is parsed by the grammar but not yet implemented in the
+    // executor. Reject any query containing a TABULATE clause with a clear
+    // "coming soon" message, whether or not VISUALISE is also present.
+    //
+    // When the executor lands, replace the block below with the original
+    // mutual-exclusion check preserved here for reference:
+    //
+    // let tab_nodes = source.find_nodes(&root, "(tabulate_statement) @tab");
+    // if !viz_nodes.is_empty() && !tab_nodes.is_empty() {
+    //     return Err(GgsqlError::ParseError(
+    //         "VISUALISE and TABULATE are mutually exclusive in a single \
+    //          query; use separate queries for each output mode."
+    //             .to_string(),
+    //     ));
+    // }
     let tab_nodes = source.find_nodes(&root, "(tabulate_statement) @tab");
-    if !viz_nodes.is_empty() && !tab_nodes.is_empty() {
+    if !tab_nodes.is_empty() {
         return Err(GgsqlError::ParseError(
-            "VISUALISE and TABULATE are mutually exclusive in a single \
-             query; use separate queries for each output mode."
+            "TABULATE support is not yet implemented; tables are coming \
+             in a future release."
                 .to_string(),
         ));
     }

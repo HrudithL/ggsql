@@ -1,3 +1,0 @@
-TABULATE small, large FROM powers
-FORMAT small, large
-  RENAMING * => '{:num %.2e}'

@@ -321,18 +321,26 @@ impl GgsqlContext {
         array.into()
     }
 
-    /// Execute a TABULATE query and return rendered, self-contained HTML.
+    /// Execute a TABULATE query.
     ///
-    /// The returned string is the same gt-styled output that the CLI's
-    /// `ggsql run --writer html` and the Jupyter kernel emit: inlined
-    /// `<style>` block, no external JS, no vega-embed bootstrap. The
-    /// caller is expected to drop the HTML into the visualisation
-    /// container as-is via `innerHTML`.
-    pub fn execute_table(&self, query: &str) -> Result<String, JsValue> {
-        let reader = self.reader.borrow();
-        let ir = ggsql::tabulate::execute::execute_with_reader(&*reader, query)
-            .map_err(|e| JsValue::from_str(&format!("TABULATE error: {:?}", e)))?;
-        Ok(ggsql::tabulate::html::render(&ir))
+    /// TABULATE is parsed by the grammar but not yet implemented in the
+    /// executor. This method returns a "coming soon" error so callers
+    /// surface a useful message instead of failing later inside the SQL
+    /// layer.
+    ///
+    /// When the executor lands, restore the original body preserved here:
+    ///
+    /// ```ignore
+    /// let reader = self.reader.borrow();
+    /// let ir = ggsql::tabulate::execute::execute_with_reader(&*reader, query)
+    ///     .map_err(|e| JsValue::from_str(&format!("TABULATE error: {:?}", e)))?;
+    /// Ok(ggsql::tabulate::html::render(&ir))
+    /// ```
+    pub fn execute_table(&self, _query: &str) -> Result<String, JsValue> {
+        Err(JsValue::from_str(
+            "TABULATE support is not yet implemented; tables are coming \
+             in a future release.",
+        ))
     }
 
     /// Whether the query contains a `TABULATE` clause.

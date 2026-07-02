@@ -1,3 +1,0 @@
-TABULATE species, island, body_mass FROM penguins
-FORMAT species, island
-  RENAMING * => '{:Title}'

@@ -1,4 +1,0 @@
-TABULATE date FROM exibble
-FORMAT date
-  SETTING locale => 'fr'
-  RENAMING * => '{:time %A %-d %B %Y}'
