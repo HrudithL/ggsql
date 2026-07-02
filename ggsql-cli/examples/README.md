@@ -1,9 +1,29 @@
-# TABULATE examples — CLI
+# `ggsql-cli` examples
 
-Runnable `.ggsql` examples that exercise the TABULATE surface through the
-`ggsql` command-line binary. For the same scenarios in the other surfaces
-see [`../jupyter/`](../jupyter/), [`../wasm/`](../wasm/), and
-[`../vscode/`](../vscode/).
+Runnable `.ggsql` files that exercise the TABULATE surface through the
+`ggsql` command-line binary. This folder is the **canonical scenario
+set** — the other surfaces (`ggsql-jupyter/examples/`,
+`ggsql-wasm/examples/`, `ggsql-vscode/examples/`) all replay these same
+queries.
+
+## Prerequisites
+
+Build the CLI binary once from the repo root:
+
+```sh
+cargo build -p ggsql-cli            # debug build — target/debug/ggsql
+cargo build -p ggsql-cli --release  # release build — target/release/ggsql
+```
+
+The `run.sh` helper in this folder will build for you if the binary is
+missing.
+
+## Cross-references
+
+For the same scenarios in the other surfaces see
+[`../../ggsql-jupyter/examples/`](../../ggsql-jupyter/examples/),
+[`../../ggsql-wasm/examples/`](../../ggsql-wasm/examples/), and
+[`../../ggsql-vscode/examples/`](../../ggsql-vscode/examples/).
 
 Implemented so far — phase 1 (column selection / reordering / hide / `*`),
 phase 2
@@ -28,34 +48,52 @@ exercises SQL CTE → header → spanner → per-column formats →
 `SCALE background` → `HIGHLIGHT … FILTER` → `FACET … SETTING fmt =>
 '<template>'` in a single query).
 
-## Run all examples
+## Run every example
+
+From the **repo root**:
 
 ```sh
-./examples/cli/run.sh           # uses target/debug/ggsql
-./examples/cli/run.sh --release # uses target/release/ggsql
+./ggsql-cli/examples/run.sh           # uses target/debug/ggsql
+./ggsql-cli/examples/run.sh --release # uses target/release/ggsql
 ```
 
-The script writes one HTML file per query to `examples/cli/out/` and
-produces `out/index.html` that lists every example with its source query
-and rendered table side-by-side. Open it in a browser:
+The script writes one HTML file per query to `ggsql-cli/examples/out/`
+and also produces `out/index.html`, a single page listing every example
+with its source query and rendered table side-by-side. Open it in a
+browser:
 
 ```sh
-"$BROWSER" examples/cli/out/index.html
+"$BROWSER" ggsql-cli/examples/out/index.html
 ```
 
 ## Run one example
 
+From the repo root:
+
 ```sh
-./target/debug/ggsql run examples/cli/01_minimal.ggsql
+./target/debug/ggsql run ggsql-cli/examples/01_minimal.ggsql
 ```
 
 Add `--output path.html` to write to a file instead of stdout, or pipe to
 a browser:
 
 ```sh
-./target/debug/ggsql run examples/cli/01_minimal.ggsql > /tmp/t.html
+./target/debug/ggsql run ggsql-cli/examples/01_minimal.ggsql > /tmp/t.html
 "$BROWSER" /tmp/t.html
 ```
+
+## Adding a new example
+
+1. Create `ggsql-cli/examples/<NN>_<slug>.ggsql`. Use the next available
+   number and a short snake_case slug.
+2. Re-run `./ggsql-cli/examples/run.sh` to refresh `out/`.
+3. If the scenario should also appear on the other surfaces, regenerate
+   those (they read from *this* folder):
+   - `python3 ggsql-vscode/examples/build_ggsql.py` (multi-cell view)
+   - `python3 ggsql-jupyter/examples/build_notebook.py` (Jupyter notebook)
+   - `python3 ggsql-wasm/examples/build_qmd.py` (Quarto document)
+4. Files whose name ends in `_error` are negative tests — `run.sh`
+   captures stderr and embeds it in the index instead of aborting.
 
 ## Files
 
