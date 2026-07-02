@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Regenerate examples/wasm/tabulate.qmd and a static preview of every
+# Regenerate ggsql-wasm/examples/tabulate.qmd and a static preview of every
 # TABULATE scenario rendered through the CLI (same renderer the WASM
 # engine uses).
 #
-# Usage:
-#   examples/wasm/run.sh            # uses target/debug/ggsql
-#   examples/wasm/run.sh --release  # uses target/release/ggsql
+# Usage (run from the repo root):
+#   ./ggsql-wasm/examples/run.sh            # uses target/debug/ggsql
+#   ./ggsql-wasm/examples/run.sh --release  # uses target/release/ggsql
 
 set -euo pipefail
 

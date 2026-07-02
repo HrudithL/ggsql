@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build examples/wasm/tabulate.qmd from examples/tabulate/*.ggsql.
+"""Build ggsql-wasm/examples/tabulate.qmd from examples/tabulate/*.ggsql.
 
 Each .ggsql file becomes a level-2 heading + a `{ggsql}` fenced code block
 that the wasm-aware Quarto extension picks up and executes in-browser. Run
@@ -46,9 +46,10 @@ bundle (loaded via the script tag injected from the YAML header above)
 then attaches a Monaco editor to each block so you can edit the query
 in the browser and re-execute it client-side via WebAssembly.
 
-The same scenarios run unchanged through the CLI (`examples/cli/`), the
-Jupyter notebook (`examples/jupyter/`), and the VS Code / Positron
-extension (`examples/vscode/`). The interactive playground also curates a
+The same scenarios run unchanged through the CLI
+(`ggsql-cli/examples/`), the Jupyter notebook
+(`ggsql-jupyter/examples/`), and the VS Code / Positron extension
+(`ggsql-vscode/examples/`). The interactive playground also curates a
 shorter set in its sidebar — see the **Tables** section of
 [the ggsql playground][playground] or `ggsql-wasm/demo/src/examples.ts`.
 
