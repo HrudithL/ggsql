@@ -13,6 +13,9 @@
     { "include": "#facet-clause" },
     { "include": "#project-clause" },
     { "include": "#label-clause" },
+    { "include": "#format-clause" },
+    { "include": "#highlight-clause" },
+    { "include": "#tabulate-clause" },
     { "include": "#sql-keywords" },
     { "include": "#visualise-clause" },
     { "include": "#operators" }
@@ -221,7 +224,7 @@
       "beginCaptures": {
         "1": { "name": "keyword.other.ggsql" }
       },
-      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|SELECT|WHERE|WITH)\\b)",
+      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|TABULATE|FORMAT|HIGHLIGHT|SELECT|WHERE|WITH)\\b)",
       "patterns": [
         { "include": "#comments" },
         { "include": "#strings" },
@@ -257,9 +260,9 @@
           "match": "\\b(x|y|xmin|xmax|ymin|ymax|xend|yend|theta|radius|thetamin|thetamax|radiusmin|radiusmax|thetaend|radiusend)\\b"
         },
         {
-          "comment": "Color and appearance aesthetics",
+          "comment": "Color and appearance aesthetics (background/foreground are TABULATE-specific)",
           "name": "support.type.aesthetic.ggsql",
-          "match": "\\b(color|colour|fill|stroke|opacity|size|shape|linetype|linewidth|width|height)\\b"
+          "match": "\\b(color|colour|fill|stroke|opacity|size|shape|linetype|linewidth|width|height|background|foreground)\\b"
         },
         {
           "comment": "Text aesthetics",
@@ -275,6 +278,28 @@
           "comment": "Facet aesthetics",
           "name": "support.type.aesthetic.ggsql",
           "match": "\\b(panel|row|column)\\b"
+        }
+      ]
+    },
+    "tabulate-setting-keys": {
+      "patterns": [
+        {
+          "comment": "TABULATE SETTING keys (FORMAT / FACET / SCALE / HIGHLIGHT SETTING params from the spec's reserved-barewords + not-reserved-inner-keys lists). Case-insensitive to mirror SQL keyword handling.",
+          "name": "support.type.property.ggsql",
+          "match": "\\b(?i:width|align|hide|locale|target|aggregate|groups|side|missing_text|face|color|colour|background|foreground|size|transform|decoration|opacity)\\b"
+        },
+        {
+          "comment": "Standardized RENAMING / SETTING string values (align, side, face, transform, decoration, aggregate). Highlighted even inside single-quoted strings so the enumeration reads as a keyword, not free text.",
+          "match": "'(auto|left|center|right|top|bottom|bold|italic|bold\\.italic|uppercase|lowercase|underline|line-through|overline|min|max|avg|median|sd|sum)'",
+          "captures": {
+            "0": { "name": "string.quoted.single.ggsql" },
+            "1": { "name": "constant.language.enum.ggsql" }
+          }
+        },
+        {
+          "comment": "Formatter selectors inside RENAMING RHS templates: '{:num ...}', '{:time ...}', '{:title}', '{:upper}', '{:lower}', bare '{}'. Case-insensitive per the spec.",
+          "match": "\\{:\\s*(?i:num|time|title|upper|lower)\\b|\\{\\}",
+          "name": "support.function.formatter.ggsql"
         }
       ]
     },
@@ -315,7 +340,7 @@
       "beginCaptures": {
         "1": { "name": "keyword.other.ggsql" }
       },
-      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|SELECT|WHERE|WITH)\\b)",
+      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|TABULATE|FORMAT|HIGHLIGHT|SELECT|WHERE|WITH)\\b)",
       "patterns": [
         {
           "comment": "Geom types from grammar.js",
@@ -330,7 +355,7 @@
       "beginCaptures": {
         "1": { "name": "keyword.other.ggsql" }
       },
-      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|SELECT|WHERE|WITH)\\b)",
+      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|TABULATE|FORMAT|HIGHLIGHT|SELECT|WHERE|WITH)\\b)",
       "patterns": [
         {
           "name": "support.type.geom.ggsql",
@@ -344,7 +369,7 @@
       "beginCaptures": {
         "1": { "name": "keyword.other.ggsql" }
       },
-      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|SELECT|WHERE|WITH)\\b)",
+      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|TABULATE|FORMAT|HIGHLIGHT|SELECT|WHERE|WITH)\\b)",
       "patterns": [
         {
           "comment": "Scale type identifiers from grammar.js",
@@ -353,18 +378,19 @@
         },
         {
           "name": "keyword.other.ggsql",
-          "match": "\\b(?i:TO|VIA|RENAMING)\\b"
+          "match": "\\b(?i:TO|VIA|FROM|RENAMING)\\b"
         },
         {
-          "comment": "Transform/palette names",
+          "comment": "Transform / palette names (viridis family, ColorBrewer, Crameri, gt named palettes)",
           "name": "constant.language.scale-type.ggsql",
-          "match": "\\b(linear|log|log10|log2|sqrt|reverse|date|datetime|time|viridis|plasma|magma|inferno|cividis|diverging|sequential|identity)\\b"
+          "match": "\\b(linear|log|log10|log2|sqrt|reverse|date|datetime|time|identity|viridis|plasma|magma|inferno|cividis|turbo|rocket|mako|diverging|sequential|RdYlGn|RdYlBu|RdBu|RdGy|BrBG|PiYG|PRGn|PuOr|Spectral|Blues|Greens|Oranges|Reds|Purples|Greys|BuGn|BuPu|GnBu|OrRd|PuBu|PuBuGn|PuRd|RdPu|YlGn|YlGnBu|YlOrBr|YlOrRd|Set1|Set2|Set3|Pastel1|Pastel2|Dark2|Accent|Paired|vik|roma|batlow|bam|broc|cork|hawaii|imola|lajolla|lapaz|nuuk|oleron|oslo|tofino|tokyo|turku|acton|bilbao|buda|davos|devon|glasgow|managua|lipari)\\b"
         },
         {
           "comment": "Scale properties",
           "name": "support.type.property.ggsql",
           "match": "\\b(type|limits|breaks|labels|expand|direction|na_value|palette|domain|range)\\b"
         },
+        { "include": "#tabulate-setting-keys" },
         { "include": "#common-clause-patterns" }
       ]
     },
@@ -373,7 +399,7 @@
       "beginCaptures": {
         "1": { "name": "keyword.other.ggsql" }
       },
-      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|SELECT|WHERE|WITH)\\b)",
+      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|TABULATE|FORMAT|HIGHLIGHT|SELECT|WHERE|WITH)\\b)",
       "patterns": [
         {
           "name": "support.type.property.ggsql",
@@ -387,6 +413,7 @@
           "name": "keyword.other.ggsql",
           "match": "\\b(?i:RENAMING)\\b"
         },
+        { "include": "#tabulate-setting-keys" },
         { "include": "#common-clause-patterns" }
       ]
     },
@@ -395,7 +422,7 @@
       "beginCaptures": {
         "1": { "name": "keyword.other.ggsql" }
       },
-      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|SELECT|WHERE|WITH)\\b)",
+      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|TABULATE|FORMAT|HIGHLIGHT|SELECT|WHERE|WITH)\\b)",
       "patterns": [
         {
           "comment": "Coord types (currently implemented: cartesian, polar)",
@@ -415,13 +442,73 @@
       "beginCaptures": {
         "1": { "name": "keyword.other.ggsql" }
       },
-      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|SELECT|WHERE|WITH)\\b)",
+      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|TABULATE|FORMAT|HIGHLIGHT|SELECT|WHERE|WITH)\\b)",
       "patterns": [
         {
           "comment": "Label types",
           "name": "support.type.property.ggsql",
           "match": "\\b(title|subtitle|x|y|caption|tag|color|colour|fill|size|shape|linetype)\\b"
         },
+        { "include": "#common-clause-patterns" }
+      ]
+    },
+    "tabulate-clause": {
+      "begin": "(?i)\\b(TABULATE)\\b",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.ggsql" }
+      },
+      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|TABULATE|FORMAT|HIGHLIGHT|SELECT|WHERE|WITH)\\b)",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#tabulate-setting-keys" },
+        { "include": "#strings" },
+        { "include": "#numbers" },
+        {
+          "name": "keyword.other.ggsql",
+          "match": "\\b(?i:FROM|AS)\\b"
+        },
+        {
+          "name": "keyword.operator.wildcard.ggsql",
+          "match": "\\*"
+        },
+        {
+          "name": "punctuation.separator.comma.ggsql",
+          "match": ","
+        }
+      ]
+    },
+    "format-clause": {
+      "begin": "(?i)\\b(FORMAT)\\b",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.ggsql" }
+      },
+      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|TABULATE|FORMAT|HIGHLIGHT|SELECT|WHERE|WITH)\\b)",
+      "patterns": [
+        {
+          "comment": "Format targeting modes",
+          "name": "keyword.control.format-mode.ggsql",
+          "match": "\\b(?i:SPAN|STUB)\\b"
+        },
+        {
+          "name": "keyword.other.ggsql",
+          "match": "\\b(?i:AS)\\b"
+        },
+        {
+          "name": "keyword.operator.wildcard.ggsql",
+          "match": "\\*"
+        },
+        { "include": "#tabulate-setting-keys" },
+        { "include": "#common-clause-patterns" }
+      ]
+    },
+    "highlight-clause": {
+      "begin": "(?i)\\b(HIGHLIGHT)\\b",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.ggsql" }
+      },
+      "end": "(?i)(?=\\b(DRAW|PLACE|SCALE|PROJECT|FACET|LABEL|VISUALISE|VISUALIZE|TABULATE|FORMAT|HIGHLIGHT|SELECT|WHERE|WITH)\\b)",
+      "patterns": [
+        { "include": "#tabulate-setting-keys" },
         { "include": "#common-clause-patterns" }
       ]
     }

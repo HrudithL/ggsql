@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+- Syntax highlighting for `TABULATE` statements: `TABULATE`, `FORMAT`
+  (with `SPAN`/`STUB` modes), and `HIGHLIGHT` are now recognised as
+  top-level clause keywords, with `background`/`foreground` added to the
+  aesthetics list so `SCALE background TO ...` inside a `TABULATE` block
+  is coloured consistently with the VISUALISE surface.
+- Extended TABULATE highlighting to every standardized identifier the
+  spec calls out: SETTING key names (`width`, `align`, `hide`, `locale`,
+  `target`, `aggregate`, `groups`, `side`, `missing_text`, `face`,
+  `color`, `background`, `foreground`, `size`, `transform`,
+  `decoration`, `opacity`); the enumerated string values those keys
+  accept (`'auto'` / `'left'` / `'center'` / `'right'`, `'top'` /
+  `'bottom'`, `'bold'` / `'italic'` / `'bold.italic'`, `'uppercase'` /
+  `'lowercase'`, `'underline'` / `'line-through'` / `'overline'`,
+  aggregate names `'min'` / `'max'` / `'avg'` / `'median'` / `'sd'` /
+  `'sum'`); the RENAMING RHS formatter selectors `{:num ...}`,
+  `{:time ...}`, `{:title}`, `{:upper}`, `{:lower}`, and bare `{}`;
+  and a broader gt / ColorBrewer / Crameri palette catalogue after
+  `SCALE ... TO` (`RdYlGn`, `RdBu`, `Spectral`, `vik`, `roma`,
+  `batlow`, ...). `AS` is now recognised inside `TABULATE` for the
+  `col AS newname` rename form.
+
 ## 0.3.2
 
 - Improved configuration options shown in Positron Connection pane for sqlite
