@@ -30,7 +30,7 @@ fixtures-capture:
 css-extract:
 	Rscript scripts/extract_gt_css.R
 
-# Re-sync from the read-only /spec mount (used inside the devcontainer).
+# Re-sync fixtures from $GGSQL_SPEC_DIR (defaults to /spec).
 sync-fixtures:
 	@if [ -d "$${GGSQL_SPEC_DIR:-/spec}/fixtures" ]; then \
 		mkdir -p tests/fixtures && \
