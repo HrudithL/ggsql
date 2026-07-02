@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build ggsql-jupyter/examples/tabulate.ipynb from the sibling NN_slug.ggsql files.
+"""Build ggsql-jupyter/examples/tabulate.ipynb from scenarios/NN_slug.ggsql.
 
-Each .ggsql file becomes a pair of cells: a markdown cell with the file name
-and any leading `--` comment as the title, followed by a code cell containing
-the query (with leading comments stripped).
+Each .ggsql file under `scenarios/` becomes a pair of cells: a markdown
+cell with the file name and any leading `--` comment as the title,
+followed by a code cell containing the query (with leading comments
+stripped).
 
 Run from any working directory:
     python3 ggsql-jupyter/examples/build_notebook.py
@@ -18,6 +19,7 @@ from pathlib import Path
 import nbformat
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+SCENARIOS_DIR = SCRIPT_DIR / "scenarios"
 OUTPUT = SCRIPT_DIR / "tabulate.ipynb"
 SCENARIO_RE = re.compile(r"^\d+_.+\.ggsql$")
 
@@ -36,9 +38,9 @@ def split_header(text: str) -> tuple[str, str]:
 
 
 def main() -> int:
-    files = sorted(p for p in SCRIPT_DIR.glob("*.ggsql") if SCENARIO_RE.match(p.name))
+    files = sorted(p for p in SCENARIOS_DIR.glob("*.ggsql") if SCENARIO_RE.match(p.name))
     if not files:
-        print(f"no NN_*.ggsql scenario files in {SCRIPT_DIR}", file=sys.stderr)
+        print(f"no NN_*.ggsql scenario files in {SCENARIOS_DIR}", file=sys.stderr)
         return 1
 
     nb = nbformat.v4.new_notebook()
