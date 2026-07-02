@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Generate, execute, and HTML-export the TABULATE Jupyter notebook.
 #
-# Usage:
-#   examples/jupyter/run.sh            # uses target/debug/ggsql-jupyter
-#   examples/jupyter/run.sh --release  # uses target/release/ggsql-jupyter
+# Usage (run from the repo root):
+#   ./ggsql-jupyter/examples/run.sh            # uses target/debug/ggsql-jupyter
+#   ./ggsql-jupyter/examples/run.sh --release  # uses target/release/ggsql-jupyter
 #
 # Requirements (one-time):
 #   pip install jupyter nbformat nbconvert nbclient

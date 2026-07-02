@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build examples/jupyter/tabulate.ipynb from examples/tabulate/*.ggsql.
+"""Build ggsql-jupyter/examples/tabulate.ipynb from examples/tabulate/*.ggsql.
 
 Each .ggsql file becomes a pair of cells: a markdown cell with the file name
 and any leading `--` comment as the title, followed by a code cell containing
