@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
-"""Build ggsql-jupyter/examples/tabulate.ipynb from examples/tabulate/*.ggsql.
+"""Build ggsql-jupyter/examples/tabulate.ipynb from the sibling NN_slug.ggsql files.
 
 Each .ggsql file becomes a pair of cells: a markdown cell with the file name
 and any leading `--` comment as the title, followed by a code cell containing
-the query (with leading comments stripped). Run this from the repo root after
-adding/editing scenarios in examples/tabulate/."""
+the query (with leading comments stripped).
+
+Run from any working directory:
+    python3 ggsql-jupyter/examples/build_notebook.py
+"""
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 import nbformat
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SOURCE_DIR = REPO_ROOT / "examples" / "tabulate"
-OUTPUT = Path(__file__).with_name("tabulate.ipynb")
+SCRIPT_DIR = Path(__file__).resolve().parent
+OUTPUT = SCRIPT_DIR / "tabulate.ipynb"
+SCENARIO_RE = re.compile(r"^\d+_.+\.ggsql$")
 
 
 def split_header(text: str) -> tuple[str, str]:
@@ -32,9 +36,9 @@ def split_header(text: str) -> tuple[str, str]:
 
 
 def main() -> int:
-    files = sorted(SOURCE_DIR.glob("*.ggsql"))
+    files = sorted(p for p in SCRIPT_DIR.glob("*.ggsql") if SCENARIO_RE.match(p.name))
     if not files:
-        print(f"no .ggsql files in {SOURCE_DIR}", file=sys.stderr)
+        print(f"no NN_*.ggsql scenario files in {SCRIPT_DIR}", file=sys.stderr)
         return 1
 
     nb = nbformat.v4.new_notebook()
@@ -45,18 +49,20 @@ def main() -> int:
     }
     nb.metadata.language_info = {"name": "ggsql", "file_extension": ".ggsql"}
 
-    nb.cells.append(
-        nbformat.v4.new_markdown_cell(
-            "# TABULATE examples — Jupyter\n\n"
-            "Every scenario from [`examples/tabulate/`](../tabulate/) executed "
-            "through the `ggsql` Jupyter kernel. Each scenario is a pair of "
-            "cells (markdown header + ggsql query). Output is rendered HTML "
-            "via the kernel's `text/html` MIME type — the same renderer the "
-            "CLI uses.\n\n"
-            "Run all cells with **Run → Run All Cells**, or re-generate this "
-            "notebook from disk with `python examples/jupyter/build_notebook.py`."
-        )
+    intro = nbformat.v4.new_markdown_cell(
+        "# TABULATE examples — Jupyter\n\n"
+        "Every `NN_<slug>.ggsql` scenario in "
+        "[`ggsql-jupyter/examples/`](.) executed through the `ggsql` "
+        "Jupyter kernel. Each scenario is a pair of cells (markdown "
+        "header + ggsql query). Output is rendered HTML via the "
+        "kernel's `text/html` MIME type — the same renderer the CLI "
+        "uses.\n\n"
+        "Run all cells with **Run → Run All Cells**, or re-generate "
+        "this notebook from disk with "
+        "`python3 ggsql-jupyter/examples/build_notebook.py`."
     )
+    intro.id = "intro"
+    nb.cells.append(intro)
 
     for path in files:
         text = path.read_text()
@@ -65,11 +71,11 @@ def main() -> int:
         title_md = f"## `{slug}.ggsql`"
         if header:
             title_md += "\n\n```\n" + header + "\n```"
-        nb.cells.append(nbformat.v4.new_markdown_cell(title_md))
+        md_cell = nbformat.v4.new_markdown_cell(title_md)
+        md_cell.id = f"md-{slug}"
+        nb.cells.append(md_cell)
         code_cell = nbformat.v4.new_code_cell(body)
-        # Examples whose filename ends in `_error` are negative tests — the
-        # query should fail. Mark them so nbconvert keeps going and the error
-        # traceback is preserved as the cell output.
+        code_cell.id = f"code-{slug}"
         if slug.endswith("_error"):
             code_cell.metadata.tags = ["raises-exception"]
         nb.cells.append(code_cell)
