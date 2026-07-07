@@ -26,10 +26,10 @@ module.exports = grammar({
   ],
 
   rules: {
-    // Main entry point - SQL followed by VISUALISE statements
+    // Main entry point - SQL followed by VISUALISE or TABULATE statements
     query: $ => seq(
       optional($.sql_portion),
-      repeat($.visualise_statement)
+      repeat(choice($.visualise_statement, $.tabulate_statement))
     ),
 
     // SQL portion - multiple statements separated by semicolons
@@ -578,6 +578,221 @@ module.exports = grammar({
       $.table_ref,
       repeat(seq(',', $.table_ref))
     )),
+
+    // =========================================================================
+    // TABULATE statement and sub-clauses
+    // =========================================================================
+
+    // TABULATE [* | col, col, ...] [FROM source] [FORMAT ...] ...
+    tabulate_statement: $ => prec.dynamic(1, seq(
+      $.tabulate_keyword,
+      optional($.tab_col_list),
+      optional($.tab_from_clause),
+      repeat($.tab_clause)
+    )),
+
+    tabulate_keyword: $ => token(prec(10, caseInsensitive('TABULATE'))),
+
+    // Column list: wildcard or explicit comma-separated names
+    tab_col_list: $ => seq(
+      choice('*', $.identifier),
+      repeat(seq(',', $.identifier))
+    ),
+
+    // FROM <source> inside a TABULATE statement
+    tab_from_clause: $ => seq(
+      token(prec(1, caseInsensitive('FROM'))),
+      field('source', $.identifier)
+    ),
+
+    // Sub-clauses allowed inside a TABULATE statement
+    tab_clause: $ => choice(
+      $.format_clause,
+      $.label_clause,
+      $.tab_scale_clause,
+      $.tab_highlight_clause,
+      $.tab_facet_clause,
+    ),
+
+    // FACET <group_col>
+    //   [SETTING target => (col, ...), aggregate => ('fn', ...),
+    //            label => ['Label', ...], side => 'top'|'bottom']
+    //
+    // Splits the table into row-groups by the value of `group_col` and
+    // emits one or more summary rows per group computed from the listed
+    // aggregate functions over the `target` columns.
+    tab_facet_clause: $ => prec.right(seq(
+      caseInsensitive('FACET'),
+      field('group', $.identifier),
+      optional($.tab_facet_setting_block)
+    )),
+
+    tab_facet_setting_block: $ => seq(
+      caseInsensitive('SETTING'),
+      $.tab_facet_pair,
+      repeat(seq(',', $.tab_facet_pair))
+    ),
+
+    tab_facet_pair: $ => seq(
+      field('key', $.identifier),
+      '=>',
+      field('value', choice(
+        $.string,
+        $.number,
+        $.boolean,
+        $.tab_facet_id_list,
+        $.tab_facet_str_list,
+        $.identifier
+      ))
+    ),
+
+    tab_facet_id_list: $ => seq(
+      '(',
+      $.identifier,
+      repeat(seq(',', $.identifier)),
+      ')'
+    ),
+
+    // Strings may be wrapped in either `(...)` or `[...]` — gt accepts
+    // both forms and the GTSQL spec lists labels with square brackets
+    // while aggregate names use parens.
+    tab_facet_str_list: $ => seq(
+      choice('(', '['),
+      $.string,
+      repeat(seq(',', $.string)),
+      choice(')', ']')
+    ),
+
+    // HIGHLIGHT <col> [, <col> ...]
+    //   FILTER <SQL predicate>
+    //   SETTING <key> => <value>, ...
+    //
+    // Multiple HIGHLIGHTs may appear per query; later clauses override
+    // earlier ones on conflict (matching gt's tab_style last-writer
+    // semantics). The FILTER expression reuses the same filter_expression
+    // rule that DRAW uses, so it is forwarded to the SQL backend verbatim.
+    tab_highlight_clause: $ => prec.right(seq(
+      caseInsensitive('HIGHLIGHT'),
+      $.identifier,
+      repeat(seq(',', $.identifier)),
+      $.filter_clause,
+      optional($.tab_highlight_setting)
+    )),
+
+    tab_highlight_setting: $ => seq(
+      caseInsensitive('SETTING'),
+      $.tab_highlight_pair,
+      repeat(seq(',', $.tab_highlight_pair))
+    ),
+
+    tab_highlight_pair: $ => seq(
+      field('key', $.identifier),
+      '=>',
+      field('value', choice($.string, $.number, $.boolean))
+    ),
+
+    // SCALE <aesthetic> [FROM (min, max)] TO <palette>|(c1, c2, ...) [VIA <id>]
+    //   SETTING target => <id>|(id, id, ...)
+    //
+    // Currently the only supported aesthetic is `background`. The TO clause
+    // may name a built-in palette (bareword) or list explicit colour stops
+    // as a parenthesised string array.
+    tab_scale_clause: $ => prec.right(seq(
+      caseInsensitive('SCALE'),
+      field('aesthetic', $.identifier),
+      optional($.tab_scale_from),
+      $.tab_scale_to,
+      optional($.tab_scale_via),
+      optional($.tab_scale_setting)
+    )),
+
+    tab_scale_from: $ => seq(
+      caseInsensitive('FROM'),
+      '(',
+      $.number, ',', $.number,
+      ')'
+    ),
+
+    tab_scale_to: $ => seq(
+      caseInsensitive('TO'),
+      choice(
+        seq('(', $.string, repeat(seq(',', $.string)), ')'),
+        field('palette', $.identifier)
+      )
+    ),
+
+    tab_scale_via: $ => seq(
+      caseInsensitive('VIA'),
+      field('transform', $.identifier)
+    ),
+
+    tab_scale_setting: $ => seq(
+      caseInsensitive('SETTING'),
+      field('key', $.identifier),
+      '=>',
+      choice(
+        seq('(', $.identifier, repeat(seq(',', $.identifier)), ')'),
+        $.identifier
+      )
+    ),
+
+    // FORMAT [SPAN | STUB] col [, col ...] [AS span_id]
+    //   [SETTING key => value, ...]
+    //   [RENAMING lhs => rhs, ...]
+    //
+    // `FORMAT *` is a wildcard that targets every visible column. It
+    // may not be combined with a comma-separated list, with SPAN/STUB,
+    // or with `AS <id>` — those forms require explicit column names.
+    format_clause: $ => prec.right(choice(
+      seq(
+        $.format_keyword,
+        $.format_wildcard,
+        optional($.format_setting_block),
+        optional($.format_renaming_block)
+      ),
+      seq(
+        $.format_keyword,
+        optional($.format_mode),
+        $.identifier,
+        repeat(seq(',', $.identifier)),
+        optional(seq(caseInsensitive('AS'), field('span_id', $.identifier))),
+        optional($.format_setting_block),
+        optional($.format_renaming_block)
+      )
+    )),
+
+    format_wildcard: $ => token(prec(4, '*')),
+
+    format_keyword: $ => token(prec(5, caseInsensitive('FORMAT'))),
+
+    format_mode: $ => choice(
+      token(prec(3, caseInsensitive('SPAN'))),
+      token(prec(3, caseInsensitive('STUB')))
+    ),
+
+    format_setting_block: $ => seq(
+      token(prec(2, caseInsensitive('SETTING'))),
+      $.format_setting_pair,
+      repeat(seq(',', $.format_setting_pair))
+    ),
+
+    format_setting_pair: $ => seq(
+      field('name', $.identifier),
+      '=>',
+      field('value', choice($.string, $.number, $.boolean))
+    ),
+
+    format_renaming_block: $ => seq(
+      token(prec(2, caseInsensitive('RENAMING'))),
+      $.format_renaming_pair,
+      repeat(seq(',', $.format_renaming_pair))
+    ),
+
+    format_renaming_pair: $ => seq(
+      field('lhs', choice('*', $.number, $.string, $.identifier)),
+      '=>',
+      field('rhs', $.string)
+    ),
 
     // VISUALISE/VISUALIZE [global_mapping] [FROM source] with clauses
     // Global mapping sets default aesthetics for all layers
